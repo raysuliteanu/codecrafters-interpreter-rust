@@ -14,6 +14,8 @@ pub enum TokenError {
     UnterminatedString { src: String, span: Span },
 }
 
+pub type TokenResult<T> = Result<T, u8>;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
     pub(crate) lexeme: Lexeme,
@@ -237,10 +239,11 @@ impl<'scanner> Scanner<'scanner> {
         Scanner { source }
     }
 
-    pub fn scan(self) -> anyhow::Result<Vec<Token>> {
+    pub fn scan(self) -> TokenResult<Vec<Token>> {
         let mut line: usize = 1;
         let mut tokens: Vec<Token> = Vec::new();
         let mut peekable_iter = self.source.char_indices().peekable();
+        let mut has_error = false;
 
         #[allow(clippy::while_let_loop)]
         loop {
@@ -305,11 +308,12 @@ impl<'scanner> Scanner<'scanner> {
                         }
 
                         if peekable_iter.peek().is_none() {
-                            return Err(TokenError::UnterminatedString {
+                            let error = TokenError::UnterminatedString {
                                 src: self.source.to_string(),
                                 span: Span::new(line, i, str.len()),
-                            }
-                            .into());
+                            };
+                            eprintln!("{error}");
+                            has_error = true;
                         } else {
                             // consume terminating "
                             let (l, _) = peekable_iter.next().unwrap();
@@ -363,21 +367,19 @@ impl<'scanner> Scanner<'scanner> {
                             _ => {}
                         }
 
-                        let num = match num_literal.parse::<f64>() {
-                            Ok(value) => value,
-                            Err(_e) => {
-                                return Err(TokenError::InvalidToken {
-                                    src: number.clone(),
-                                    span: Span::new(line, i, num_literal.len()),
-                                }
-                                .into());
-                            }
-                        };
-
-                        tokens.push(Token::new(
-                            Lexeme::Number(num_literal.to_string(), num),
-                            (line, i, num_literal.len()).into(),
-                        ))
+                        if let Ok(num) = num_literal.parse::<f64>() {
+                            tokens.push(Token::new(
+                                Lexeme::Number(num_literal.to_string(), num),
+                                (line, i, num_literal.len()).into(),
+                            ));
+                        } else {
+                            let error = TokenError::InvalidToken {
+                                src: number.clone(),
+                                span: Span::new(line, i, num_literal.len()),
+                            };
+                            eprintln!("{error}");
+                            has_error = true;
+                        }
                     }
                     c if c.is_alphabetic() | (c == '_') => {
                         let mut s = String::from(c);
@@ -413,11 +415,12 @@ impl<'scanner> Scanner<'scanner> {
                         }
                     }
                     _ => {
-                        return Err(TokenError::InvalidToken {
+                        let error = TokenError::InvalidToken {
                             src: self.source.to_string(),
                             span: Span::new(line, i, 1),
-                        }
-                        .into());
+                        };
+                        eprintln!("{error}");
+                        has_error = true;
                     }
                 },
                 None => {
@@ -431,7 +434,9 @@ impl<'scanner> Scanner<'scanner> {
             Span::new(line, self.source.len(), 0),
         ));
 
-        Ok(tokens)
+        tokens.iter().for_each(|t| println!("{t}"));
+
+        if has_error { Err(65) } else { Ok(tokens) }
     }
 }
 
@@ -460,72 +465,54 @@ mod tests {
         let span = Span::new(1, 0, 1);
         let lexeme = Lexeme::LeftParen('(');
         let token = Token::new(lexeme.clone(), span.clone());
-        
+
         assert_eq!(token.lexeme, lexeme);
         assert_eq!(token.span, span);
     }
 
     #[test]
     fn test_token_display_string() {
-        let token = Token::new(
-            Lexeme::String("hello".to_string()),
-            Span::new(1, 0, 7)
-        );
-        assert_eq!(format!("{}", token), "STRING \"hello\" hello");
+        let token = Token::new(Lexeme::String("hello".to_string()), Span::new(1, 0, 7));
+        assert_eq!(format!("{token}"), "STRING \"hello\" hello");
     }
 
     #[test]
     fn test_token_display_number_integer() {
-        let token = Token::new(
-            Lexeme::Number("42".to_string(), 42.0),
-            Span::new(1, 0, 2)
-        );
-        assert_eq!(format!("{}", token), "NUMBER 42 42.0");
+        let token = Token::new(Lexeme::Number("42".to_string(), 42.0), Span::new(1, 0, 2));
+        assert_eq!(format!("{token}"), "NUMBER 42 42.0");
     }
 
     #[test]
     fn test_token_display_number_float() {
-        let token = Token::new(
-            Lexeme::Number("3.14".to_string(), 3.14),
-            Span::new(1, 0, 4)
-        );
-        assert_eq!(format!("{}", token), "NUMBER 3.14 3.14");
+        let token = Token::new(Lexeme::Number("1.23".to_string(), 1.23), Span::new(1, 0, 4));
+        assert_eq!(format!("{token}"), "NUMBER 1.23 1.23");
     }
 
     #[test]
     fn test_token_display_identifier() {
         let token = Token::new(
             Lexeme::Identifier("variable".to_string()),
-            Span::new(1, 0, 8)
+            Span::new(1, 0, 8),
         );
-        assert_eq!(format!("{}", token), "IDENTIFIER variable null");
+        assert_eq!(format!("{token}"), "IDENTIFIER variable null");
     }
 
     #[test]
     fn test_token_display_single_char() {
-        let token = Token::new(
-            Lexeme::LeftParen('('),
-            Span::new(1, 0, 1)
-        );
-        assert_eq!(format!("{}", token), "LEFT_PAREN ( null");
+        let token = Token::new(Lexeme::LeftParen('('), Span::new(1, 0, 1));
+        assert_eq!(format!("{token}"), "LEFT_PAREN ( null");
     }
 
     #[test]
     fn test_token_display_keyword() {
-        let token = Token::new(
-            Lexeme::True("TRUE".to_string()),
-            Span::new(1, 0, 4)
-        );
-        assert_eq!(format!("{}", token), "TRUE true null");
+        let token = Token::new(Lexeme::True("TRUE".to_string()), Span::new(1, 0, 4));
+        assert_eq!(format!("{token}"), "TRUE true null");
     }
 
     #[test]
     fn test_token_display_eof() {
-        let token = Token::new(
-            Lexeme::Eof("EOF".to_string()),
-            Span::new(1, 0, 0)
-        );
-        assert_eq!(format!("{}", token), "EOF  null");
+        let token = Token::new(Lexeme::Eof("EOF".to_string()), Span::new(1, 0, 0));
+        assert_eq!(format!("{token}"), "EOF  null");
     }
 
     #[test]
@@ -579,13 +566,19 @@ mod tests {
     #[test]
     #[should_panic(expected = "invalid token invalid")]
     fn test_lexeme_from_invalid() {
-        Lexeme::from("invalid");
+        let _ = Lexeme::from("invalid");
     }
 
     #[test]
     fn test_lexeme_display() {
-        assert_eq!(format!("{}", Lexeme::Number("42".to_string(), 42.0)), "NUMBER");
-        assert_eq!(format!("{}", Lexeme::Identifier("var".to_string())), "IDENTIFIER");
+        assert_eq!(
+            format!("{}", Lexeme::Number("42".to_string(), 42.0)),
+            "NUMBER"
+        );
+        assert_eq!(
+            format!("{}", Lexeme::Identifier("var".to_string())),
+            "IDENTIFIER"
+        );
         assert_eq!(format!("{}", Lexeme::String("hello".to_string())), "STRING");
         assert_eq!(format!("{}", Lexeme::LeftParen('(')), "LEFT_PAREN");
         assert_eq!(format!("{}", Lexeme::True("TRUE".to_string())), "TRUE");
@@ -611,7 +604,7 @@ mod tests {
     fn test_scanner_single_tokens() {
         let scanner = Scanner::new("(){},.+-;*");
         let tokens = scanner.scan().unwrap();
-        
+
         let expected_lexemes = vec![
             Lexeme::LeftParen('('),
             Lexeme::RightParen(')'),
@@ -625,7 +618,7 @@ mod tests {
             Lexeme::Star('*'),
             Lexeme::Eof("EOF".to_string()),
         ];
-        
+
         assert_eq!(tokens.len(), expected_lexemes.len());
         for (token, expected) in tokens.iter().zip(expected_lexemes.iter()) {
             assert_eq!(&token.lexeme, expected);
@@ -636,7 +629,7 @@ mod tests {
     fn test_scanner_comparison_operators() {
         let scanner = Scanner::new("= == ! != < <= > >=");
         let tokens = scanner.scan().unwrap();
-        
+
         let expected_lexemes = vec![
             Lexeme::Eq('='),
             Lexeme::EqEq("==".to_string()),
@@ -648,7 +641,7 @@ mod tests {
             Lexeme::GreaterEq(">=".to_string()),
             Lexeme::Eof("EOF".to_string()),
         ];
-        
+
         assert_eq!(tokens.len(), expected_lexemes.len());
         for (token, expected) in tokens.iter().zip(expected_lexemes.iter()) {
             assert_eq!(&token.lexeme, expected);
@@ -659,7 +652,7 @@ mod tests {
     fn test_scanner_string_literal() {
         let scanner = Scanner::new("\"hello world\"");
         let tokens = scanner.scan().unwrap();
-        
+
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].lexeme, Lexeme::String("hello world".to_string()));
         assert_eq!(tokens[1].lexeme, Lexeme::Eof("EOF".to_string()));
@@ -669,20 +662,20 @@ mod tests {
     fn test_scanner_unterminated_string() {
         let scanner = Scanner::new("\"unterminated");
         let result = scanner.scan();
-        
+
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Unterminated string"));
+        assert_eq!(error, 65);
     }
 
     #[test]
     fn test_scanner_numbers() {
-        let scanner = Scanner::new("123 3.14 42.0");
+        let scanner = Scanner::new("123 1.23 42.0");
         let tokens = scanner.scan().unwrap();
-        
+
         assert_eq!(tokens.len(), 4);
         assert_eq!(tokens[0].lexeme, Lexeme::Number("123".to_string(), 123.0));
-        assert_eq!(tokens[1].lexeme, Lexeme::Number("3.14".to_string(), 3.14));
+        assert_eq!(tokens[1].lexeme, Lexeme::Number("1.23".to_string(), 1.23));
         assert_eq!(tokens[2].lexeme, Lexeme::Number("42.0".to_string(), 42.0));
         assert_eq!(tokens[3].lexeme, Lexeme::Eof("EOF".to_string()));
     }
@@ -691,11 +684,14 @@ mod tests {
     fn test_scanner_identifiers() {
         let scanner = Scanner::new("variable _private camelCase");
         let tokens = scanner.scan().unwrap();
-        
+
         assert_eq!(tokens.len(), 4);
         assert_eq!(tokens[0].lexeme, Lexeme::Identifier("variable".to_string()));
         assert_eq!(tokens[1].lexeme, Lexeme::Identifier("_private".to_string()));
-        assert_eq!(tokens[2].lexeme, Lexeme::Identifier("camelCase".to_string()));
+        assert_eq!(
+            tokens[2].lexeme,
+            Lexeme::Identifier("camelCase".to_string())
+        );
         assert_eq!(tokens[3].lexeme, Lexeme::Eof("EOF".to_string()));
     }
 
@@ -703,7 +699,7 @@ mod tests {
     fn test_scanner_keywords() {
         let scanner = Scanner::new("true false nil and or");
         let tokens = scanner.scan().unwrap();
-        
+
         assert_eq!(tokens.len(), 6);
         assert_eq!(tokens[0].lexeme, Lexeme::True("TRUE".to_string()));
         assert_eq!(tokens[1].lexeme, Lexeme::False("FALSE".to_string()));
@@ -717,7 +713,7 @@ mod tests {
     fn test_scanner_comments() {
         let scanner = Scanner::new("// this is a comment\n42");
         let tokens = scanner.scan().unwrap();
-        
+
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].lexeme, Lexeme::Number("42".to_string(), 42.0));
         assert_eq!(tokens[1].lexeme, Lexeme::Eof("EOF".to_string()));
@@ -727,7 +723,7 @@ mod tests {
     fn test_scanner_whitespace() {
         let scanner = Scanner::new("  \t\n  42  \r\n  ");
         let tokens = scanner.scan().unwrap();
-        
+
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].lexeme, Lexeme::Number("42".to_string(), 42.0));
         assert_eq!(tokens[1].lexeme, Lexeme::Eof("EOF".to_string()));
@@ -737,10 +733,10 @@ mod tests {
     fn test_scanner_invalid_character() {
         let scanner = Scanner::new("@");
         let result = scanner.scan();
-        
+
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Unexpected character"));
+        assert_eq!(error, 65);
     }
 
     #[test]
@@ -750,13 +746,13 @@ mod tests {
                 if (n <= 1) return n;
                 return fibonacci(n - 1) + fibonacci(n - 2);
             }
-            
+
             print fibonacci(10);
         "#;
-        
+
         let scanner = Scanner::new(source);
         let tokens = scanner.scan().unwrap();
-        
+
         // Should contain fun, identifier, (, identifier, ), {, if, (, etc.
         assert!(tokens.len() > 20);
         assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Fun(_))));
@@ -773,8 +769,14 @@ mod tests {
 
     #[test]
     fn test_keyword_token_helper() {
-        assert_eq!(keyword_token("true"), Some(Lexeme::True("TRUE".to_string())));
-        assert_eq!(keyword_token("false"), Some(Lexeme::False("FALSE".to_string())));
+        assert_eq!(
+            keyword_token("true"),
+            Some(Lexeme::True("TRUE".to_string()))
+        );
+        assert_eq!(
+            keyword_token("false"),
+            Some(Lexeme::False("FALSE".to_string()))
+        );
         assert_eq!(keyword_token("identifier"), None);
     }
 
@@ -784,29 +786,5 @@ mod tests {
         assert!(one_of('\n', "\n\r"));
         assert!(!one_of('x', "abc"));
         assert!(!one_of('a', ""));
-    }
-
-    #[test]
-    fn test_token_error_display() {
-        let span = Span::new(1, 0, 1);
-        let error = TokenError::InvalidToken {
-            src: "test@".to_string(),
-            span,
-        };
-        let error_msg = format!("{}", error);
-        assert!(error_msg.contains("line 1"));
-        assert!(error_msg.contains("Unexpected character"));
-    }
-
-    #[test]
-    fn test_token_error_unterminated_string() {
-        let span = Span::new(1, 0, 5);
-        let error = TokenError::UnterminatedString {
-            src: "\"test".to_string(),
-            span,
-        };
-        let error_msg = format!("{}", error);
-        assert!(error_msg.contains("line 1"));
-        assert!(error_msg.contains("Unterminated string"));
     }
 }

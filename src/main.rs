@@ -34,24 +34,20 @@ fn main() -> Result<ExitCode> {
 
     let lox = Lox::parse();
 
+    let mut rc = 0;
     match lox.commands {
         LoxCommands::Tokenize { filename } => {
             let source = get_source(filename)?;
-            Scanner::new(&source)
-                .scan()
-                .map_err(|e| eprintln!("{e}"))
-                .iter()
-                .flatten()
-                .for_each(|t| println!("{t}"));
+            if let Err(e) = Scanner::new(&source).scan() {
+                rc = e;
+            }
         }
         LoxCommands::Parse { filename } => {
             let source = get_source(filename)?;
-            parser::Parser::new(&source)
-                .parse()
-                .map_err(|e| eprintln!("{e}"))
-                .iter()
-                .flatten()
-                .for_each(|ast| println!("{ast}"));
+            if let Err(e) = parser::Parser::new(&source).parse() {
+                eprintln!("{e}");
+                rc = 65;
+            }
         }
 
         LoxCommands::Evaluate { filename } => {
@@ -65,9 +61,7 @@ fn main() -> Result<ExitCode> {
                 let _ = repl();
             }
         }
-    }
-
-    let rc = 0;
+    };
 
     Ok(ExitCode::from(rc))
 }

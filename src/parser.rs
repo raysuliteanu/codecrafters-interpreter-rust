@@ -6,6 +6,7 @@ use thiserror::Error;
 use crate::token::{Lexeme, Scanner, Token, lexeme_from};
 
 type PeekableTokenIter<'a> = Peekable<std::slice::Iter<'a, Token>>;
+pub type ParseResult<T> = Result<T, u8>;
 
 #[derive(Debug, PartialEq)]
 pub struct Ast {
@@ -23,13 +24,16 @@ impl Display for Ast {
 pub enum AstType {
     Class,
     Function,
-    Variable,
+    // name, initializer
+    Variable(Token, Option<Box<Ast>>),
     ExprStatement,
     ForStatement,
-    IfStatement,
+    // condition, then, else
+    IfStatement(Box<Ast>, Box<Ast>, Option<Box<Ast>>),
     PrintStatement(Box<Ast>),
     ReturnStatement(Option<Box<Ast>>),
-    WhileStatement,
+    // cond, body
+    WhileStatement(Box<Ast>, Box<Ast>),
     Block,
     Group(Box<Ast>),
     Expression(ExpressionType),
@@ -41,21 +45,40 @@ impl Display for AstType {
         match self {
             AstType::Class => todo!(),
             AstType::Function => todo!(),
-            AstType::Variable => todo!(),
+            AstType::Variable(ident, expr) => {
+                let name = match &ident.lexeme {
+                    Lexeme::Identifier(name) => name,
+                    _ => panic!("Variable declaration must have an identifier token"),
+                };
+                write!(f, "var {name}")?;
+                if let Some(ast) = expr {
+                    write!(f, " = {ast}")?;
+                }
+                write!(f, ";")
+            }
             AstType::ExprStatement => todo!(),
             AstType::ForStatement => todo!(),
-            AstType::IfStatement => todo!(),
+            AstType::IfStatement(cond, then_stmt, else_stmt) => {
+                writeln!(f, "if {cond} {{ {then_stmt} }}")?;
+                if let Some(else_stmt) = else_stmt {
+                    write!(f, "else {{ {else_stmt} }}")?;
+                }
+                Ok(())
+            }
             AstType::PrintStatement(ast) => {
                 write!(f, "print {ast};")
             }
             AstType::ReturnStatement(ast) => {
                 write!(f, "return")?;
-                if ast.is_some() {
-                    write!(f, " {}", ast.as_ref().unwrap())?;
+                if let Some(ast) = ast {
+                    write!(f, " {ast}")?;
                 }
                 write!(f, ";")
             }
-            AstType::WhileStatement => todo!(),
+            AstType::WhileStatement(cond, body) => {
+                writeln!(f, "while {cond} {{")?;
+                writeln!(f, "{body} }}")
+            }
             AstType::Block => todo!(),
             AstType::Group(ast) => {
                 write!(f, "(group {ast})")
@@ -228,14 +251,27 @@ impl<'parser> Parser<'parser> {
         Parser { source }
     }
 
-    pub fn parse(&mut self) -> anyhow::Result<Vec<Ast>> {
+    pub fn parse(&mut self) -> ParseResult<Vec<Ast>> {
         let scanner = Scanner::new(self.source);
-        let tokens = scanner.scan()?;
-        if tokens.is_empty() {
-            return Ok(vec![]);
+        if let Ok(tokens) = scanner.scan() {
+            if tokens.is_empty() {
+                trace!("no tokens scanned");
+                return Ok(vec![]);
+            }
+            trace!("parsing {} tokens", tokens.len());
+            match Parser::program(&mut tokens.iter().peekable()) {
+                Ok(v) => {
+                    v.iter().for_each(|node| println!("{node}"));
+                    Ok(v)
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    Err(65)
+                }
+            }
+        } else {
+            Err(65)
         }
-
-        Parser::program(&mut tokens.iter().peekable())
     }
 
     fn program(tokens: &mut PeekableTokenIter) -> anyhow::Result<Vec<Ast>> {
@@ -247,6 +283,8 @@ impl<'parser> Parser<'parser> {
             let statement = Parser::declaration(tokens)?;
             ast.push(statement);
         }
+
+        trace!("parsed AST: {ast:?}");
 
         Ok(ast)
     }
@@ -272,8 +310,40 @@ impl<'parser> Parser<'parser> {
         todo!("fun decl")
     }
 
-    fn var_decl(_tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
-        todo!("var decl")
+    // varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
+    fn var_decl(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
+        trace!("var_decl: {:?}", tokens.peek());
+
+        // eat 'var' token
+        let var_token = tokens.next().unwrap();
+        assert_eq!(var_token.lexeme, lexeme_from("var"));
+
+        match tokens.peek() {
+            Some(t) => match &t.lexeme {
+                Lexeme::Identifier(_) => {
+                    trace!("found identifier: {t}");
+                    let identifier_token = tokens.next().unwrap().clone();
+                    let expr = if let Some(_e) = tokens.next_if(|t| t.lexeme == lexeme_from("=")) {
+                        let expr = Parser::expression(tokens)?;
+                        Some(Box::new(expr))
+                    } else {
+                        None
+                    };
+
+                    if tokens.next_if(|t| t.lexeme == lexeme_from(";")).is_some() {
+                        Ok(Ast {
+                            ty: AstType::Variable(identifier_token, expr),
+                        })
+                    } else if tokens.peek().is_some() {
+                        ast_expected_token!(tokens.peek().unwrap(), lexeme_from(";"))
+                    } else {
+                        Err(ParseError::UnexpectedEof.into())
+                    }
+                }
+                _ => ast_expected_token!(t, lexeme_from("identifier")),
+            },
+            _ => todo!("unexpected eof"),
+        }
     }
 
     fn statement(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
@@ -306,13 +376,43 @@ impl<'parser> Parser<'parser> {
 
     fn if_stmt(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
         trace!("if_stmt: {:?}", tokens.peek());
-        todo!("parse if stmt")
+        let if_token = tokens.next().unwrap();
+        assert_eq!(if_token.lexeme, lexeme_from("if"));
+
+        let cond = Parser::expression(tokens)?;
+        let then_stmt = Parser::statement(tokens)?;
+        let else_stmt = if tokens
+            .next_if(|t| t.lexeme == lexeme_from("else"))
+            .is_some()
+        {
+            Some(Box::new(Parser::statement(tokens)?))
+        } else {
+            None
+        };
+
+        Ok(Ast {
+            ty: AstType::IfStatement(Box::new(cond), Box::new(then_stmt), else_stmt),
+        })
+    }
+
+    fn while_stmt(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
+        trace!("while_stmt: {:?}", tokens.peek());
+        let while_token = tokens.next().unwrap();
+        assert_eq!(while_token.lexeme, lexeme_from("while"));
+
+        let cond = Parser::expression(tokens)?;
+        let body = Parser::statement(tokens)?;
+
+        Ok(Ast {
+            ty: AstType::WhileStatement(Box::new(cond), Box::new(body)),
+        })
     }
 
     fn print_stmt(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
         trace!("print_stmt: {:?}", tokens.peek());
 
         let print_token = tokens.next().unwrap();
+        assert_eq!(print_token.lexeme, lexeme_from("print"));
 
         let expr = Parser::expression(tokens)?;
         if tokens.next_if(|t| t.lexeme == lexeme_from(";")).is_some() {
@@ -320,7 +420,7 @@ impl<'parser> Parser<'parser> {
                 ty: AstType::PrintStatement(Box::new(expr)),
             })
         } else if tokens.peek().is_some() {
-            ast_expected_token!(print_token, lexeme_from(";"))
+            ast_expected_token!(tokens.peek().unwrap(), lexeme_from(";"))
         } else {
             Err(ParseError::UnexpectedEof.into())
         }
@@ -361,11 +461,6 @@ impl<'parser> Parser<'parser> {
         } else {
             ast_expected_token!(return_token, lexeme_from(";"))
         }
-    }
-
-    fn while_stmt(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
-        trace!("while_stmt: {:?}", tokens.peek());
-        todo!("parse while stmt")
     }
 
     fn expression_statement(tokens: &mut PeekableTokenIter) -> anyhow::Result<Ast> {
@@ -605,9 +700,9 @@ mod tests {
         assert_eq!(nil_ast.to_string(), "NIL");
 
         let number_ast = Ast {
-            ty: AstType::Terminal(create_token(Lexeme::Number("3.14".to_string(), 3.14))),
+            ty: AstType::Terminal(create_token(Lexeme::Number("1.23".to_string(), 1.23))),
         };
-        assert_eq!(number_ast.to_string(), "3.14");
+        assert_eq!(number_ast.to_string(), "1.23");
 
         let string_ast = Ast {
             ty: AstType::Terminal(create_token(Lexeme::String("hello".to_string()))),
