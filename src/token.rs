@@ -9,8 +9,9 @@ pub enum TokenError {
     .src[.span.offset()..(.span.offset() + .span.len())].to_string())]
     InvalidToken { src: String, span: Span },
 
-    #[error("[line {}] Error: Unterminated string: {}", .span.line(),
-    .src[.span.offset()..(.span.offset() + .span.len())].to_string())]
+    // CC/Book wants error message exactly like this even though easy
+    // enough to have the part of the unterminated string in the error
+    #[error("[line {}] Error: Unterminated string.", .span.line())]
     UnterminatedString { src: String, span: Span },
 }
 
