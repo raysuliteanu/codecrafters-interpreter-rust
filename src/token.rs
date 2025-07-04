@@ -384,10 +384,9 @@ impl<'scanner> Scanner<'scanner> {
                     }
                     c if c.is_alphabetic() | (c == '_') => {
                         let mut s = String::from(c);
-                        while peekable_iter
-                            .peek()
-                            .is_some_and(|(_, l)| matches!(*l, '_' | 'a'..='z'|'A'..='Z'))
-                        {
+                        while peekable_iter.peek().is_some_and(
+                            |(_, l)| matches!(*l, '_' | 'a'..='z'|'A'..='Z' | '0'..'9'),
+                        ) {
                             let (_, ch) = peekable_iter.next().unwrap();
                             s.push(ch);
                         }
@@ -683,12 +682,15 @@ mod tests {
 
     #[test]
     fn test_scanner_identifiers() {
-        let scanner = Scanner::new("variable _private camelCase");
+        let scanner = Scanner::new("variable _123private camelCase");
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 4);
         assert_eq!(tokens[0].lexeme, Lexeme::Identifier("variable".to_string()));
-        assert_eq!(tokens[1].lexeme, Lexeme::Identifier("_private".to_string()));
+        assert_eq!(
+            tokens[1].lexeme,
+            Lexeme::Identifier("_123private".to_string())
+        );
         assert_eq!(
             tokens[2].lexeme,
             Lexeme::Identifier("camelCase".to_string())
