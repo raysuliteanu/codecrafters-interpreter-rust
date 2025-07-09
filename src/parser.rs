@@ -129,7 +129,14 @@ impl Display for AstType {
                 | Lexeme::Less(v)
                 | Lexeme::Greater(v)
                 | Lexeme::Slash(v) => write!(f, "{v}"),
-                Lexeme::Number(_, v) => write!(f, "{v}"),
+                Lexeme::Number(_, v) => {
+                    if *v == v.trunc() {
+                        write!(f, "{v}.0")
+                    } else {
+                        write!(f, "{v}")
+                    }
+                }
+
                 Lexeme::Eof(_) => unreachable!(),
             },
         }
