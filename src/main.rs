@@ -38,13 +38,13 @@ fn main() -> Result<ExitCode> {
     match lox.commands {
         LoxCommands::Tokenize { filename } => {
             let source = get_source(filename)?;
-            if let Err(e) = Scanner::new(&source).scan() {
+            if let Err(e) = Scanner::new(&source, true).scan() {
                 rc = e;
             }
         }
         LoxCommands::Parse { filename } => {
             let source = get_source(filename)?;
-            if let Err(e) = parser::Parser::new(&source).parse() {
+            if let Err(e) = parser::Parser::new(&source, true).parse() {
                 eprintln!("{e}");
                 rc = 65;
             }

@@ -233,11 +233,15 @@ impl Display for Lexeme {
 
 pub struct Scanner<'scanner> {
     source: &'scanner str,
+    print_tokens: bool,
 }
 
 impl<'scanner> Scanner<'scanner> {
-    pub fn new(source: &'scanner str) -> Self {
-        Scanner { source }
+    pub fn new(source: &'scanner str, print_tokens: bool) -> Self {
+        Scanner {
+            source,
+            print_tokens,
+        }
     }
 
     pub fn scan(self) -> TokenResult<Vec<Token>> {
@@ -384,6 +388,8 @@ impl<'scanner> Scanner<'scanner> {
                     }
                     c if c.is_alphabetic() | (c == '_') => {
                         let mut s = String::from(c);
+
+                        #[allow(clippy::almost_complete_range)]
                         while peekable_iter.peek().is_some_and(
                             |(_, l)| matches!(*l, '_' | 'a'..='z'|'A'..='Z' | '0'..'9'),
                         ) {
@@ -434,7 +440,9 @@ impl<'scanner> Scanner<'scanner> {
             Span::new(line, self.source.len(), 0),
         ));
 
-        tokens.iter().for_each(|t| println!("{t}"));
+        if self.print_tokens {
+            tokens.iter().for_each(|t| println!("{t}"));
+        }
 
         if has_error { Err(65) } else { Ok(tokens) }
     }
@@ -588,13 +596,13 @@ mod tests {
     #[test]
     fn test_scanner_new() {
         let source = "test source";
-        let scanner = Scanner::new(source);
+        let scanner = Scanner::new(source, true);
         assert_eq!(scanner.source, source);
     }
 
     #[test]
     fn test_scanner_empty_source() {
-        let scanner = Scanner::new("");
+        let scanner = Scanner::new("", true);
         let tokens = scanner.scan().unwrap();
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].lexeme, Lexeme::Eof("EOF".to_string()));
@@ -602,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_scanner_single_tokens() {
-        let scanner = Scanner::new("(){},.+-;*");
+        let scanner = Scanner::new("(){},.+-;*", true);
         let tokens = scanner.scan().unwrap();
 
         let expected_lexemes = vec![
@@ -627,7 +635,7 @@ mod tests {
 
     #[test]
     fn test_scanner_comparison_operators() {
-        let scanner = Scanner::new("= == ! != < <= > >=");
+        let scanner = Scanner::new("= == ! != < <= > >=", true);
         let tokens = scanner.scan().unwrap();
 
         let expected_lexemes = vec![
@@ -650,7 +658,7 @@ mod tests {
 
     #[test]
     fn test_scanner_string_literal() {
-        let scanner = Scanner::new("\"hello world\"");
+        let scanner = Scanner::new("\"hello world\"", true);
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -660,7 +668,7 @@ mod tests {
 
     #[test]
     fn test_scanner_unterminated_string() {
-        let scanner = Scanner::new("\"unterminated");
+        let scanner = Scanner::new("\"unterminated", true);
         let result = scanner.scan();
 
         assert!(result.is_err());
@@ -670,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_scanner_numbers() {
-        let scanner = Scanner::new("123 1.23 42.0");
+        let scanner = Scanner::new("123 1.23 42.0", true);
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 4);
@@ -682,7 +690,7 @@ mod tests {
 
     #[test]
     fn test_scanner_identifiers() {
-        let scanner = Scanner::new("variable _123private camelCase");
+        let scanner = Scanner::new("variable _123private camelCase", true);
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 4);
@@ -700,7 +708,7 @@ mod tests {
 
     #[test]
     fn test_scanner_keywords() {
-        let scanner = Scanner::new("true false nil and or");
+        let scanner = Scanner::new("true false nil and or", true);
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 6);
@@ -714,7 +722,7 @@ mod tests {
 
     #[test]
     fn test_scanner_comments() {
-        let scanner = Scanner::new("// this is a comment\n42");
+        let scanner = Scanner::new("// this is a comment\n42", true);
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -724,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_scanner_whitespace() {
-        let scanner = Scanner::new("  \t\n  42  \r\n  ");
+        let scanner = Scanner::new("  \t\n  42  \r\n  ", true);
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 2);
@@ -734,7 +742,7 @@ mod tests {
 
     #[test]
     fn test_scanner_invalid_character() {
-        let scanner = Scanner::new("@");
+        let scanner = Scanner::new("@", true);
         let result = scanner.scan();
 
         assert!(result.is_err());
@@ -753,7 +761,7 @@ mod tests {
             print fibonacci(10);
         "#;
 
-        let scanner = Scanner::new(source);
+        let scanner = Scanner::new(source, true);
         let tokens = scanner.scan().unwrap();
 
         // Should contain fun, identifier, (, identifier, ), {, if, (, etc.
