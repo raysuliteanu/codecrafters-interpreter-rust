@@ -206,23 +206,13 @@ impl<'eval> Eval<'_> {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l == r),
                 (EvalValue::String(l), EvalValue::String(r)) => EvalValue::Boolean(l == r),
                 (EvalValue::Boolean(l), EvalValue::Boolean(r)) => EvalValue::Boolean(l == r),
-                _ => {
-                    return Err(EvalErrors::InvalidBinaryOp {
-                        op: op.lexeme.clone(),
-                    }
-                    .into());
-                }
+                _ => EvalValue::Boolean(false),
             },
             Lexeme::BangEq(_) => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l != r),
                 (EvalValue::String(l), EvalValue::String(r)) => EvalValue::Boolean(l != r),
                 (EvalValue::Boolean(l), EvalValue::Boolean(r)) => EvalValue::Boolean(l != r),
-                _ => {
-                    return Err(EvalErrors::InvalidBinaryOp {
-                        op: op.lexeme.clone(),
-                    }
-                    .into());
-                }
+                _ => EvalValue::Boolean(true),
             },
             Lexeme::Less(_) => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l < r),
@@ -799,16 +789,14 @@ mod tests {
             lexeme: Lexeme::String("hello".to_string()),
             span: Span::new(0, 0, 1),
         });
+
         let number_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("5".to_string(), 5.0),
             span: Span::new(0, 0, 1),
         });
 
         let result = eval.eval_binary(&eq_token, &string_expr, &number_expr);
-        assert!(result.is_err());
-
-        let error_msg = format!("{}", result.unwrap_err());
-        assert!(error_msg.contains("invalid operation"));
+        assert!(result.is_ok_and(|val| val == EvalValue::Boolean(false)));
     }
 
     #[test]
