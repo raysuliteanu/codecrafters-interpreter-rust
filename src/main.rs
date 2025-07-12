@@ -9,7 +9,11 @@ use std::{
     process::ExitCode,
 };
 
-use crate::{eval::EvalErrors, parser::ParseError, token::Scanner};
+use crate::{
+    eval::{EvalErrors, EvalValue},
+    parser::ParseError,
+    token::Scanner,
+};
 
 mod eval;
 mod model;
@@ -70,7 +74,11 @@ fn main() -> Result<ExitCode> {
             if let Some(file) = filename {
                 let source = get_source(file)?;
                 match eval::Eval::new(&source).evaluate() {
-                    Ok(r) => println!("{r}"),
+                    Ok(r) => {
+                        if r != EvalValue::Nil {
+                            println!("{r}");
+                        }
+                    }
                     Err(e) => {
                         eprintln!("{e}");
                         rc = if e.downcast_ref::<ParseError>().is_some() {
