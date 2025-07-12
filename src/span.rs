@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
-pub(crate) struct Span {
+pub struct Span {
     offset: usize,
     len: usize,
     line: usize,

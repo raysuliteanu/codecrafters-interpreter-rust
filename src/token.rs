@@ -141,6 +141,52 @@ pub enum Lexeme {
     Eof(String),
 }
 
+impl From<&Lexeme> for String {
+    fn from(value: &Lexeme) -> Self {
+        match value {
+            Lexeme::True(s)
+            | Lexeme::False(s)
+            | Lexeme::Nil(s)
+            | Lexeme::And(s)
+            | Lexeme::Or(s)
+            | Lexeme::Class(s)
+            | Lexeme::For(s)
+            | Lexeme::Fun(s)
+            | Lexeme::If(s)
+            | Lexeme::Else(s)
+            | Lexeme::Return(s)
+            | Lexeme::Super(s)
+            | Lexeme::This(s)
+            | Lexeme::Var(s)
+            | Lexeme::While(s)
+            | Lexeme::Print(s)
+            | Lexeme::Identifier(s)
+            | Lexeme::String(s)
+            | Lexeme::EqEq(s)
+            | Lexeme::BangEq(s)
+            | Lexeme::LessEq(s)
+            | Lexeme::GreaterEq(s)
+            | Lexeme::Eof(s) => String::from(s),
+            Lexeme::LeftParen(c)
+            | Lexeme::RightParen(c)
+            | Lexeme::LeftBrace(c)
+            | Lexeme::RightBrace(c)
+            | Lexeme::Comma(c)
+            | Lexeme::Dot(c)
+            | Lexeme::Minus(c)
+            | Lexeme::Plus(c)
+            | Lexeme::SemiColon(c)
+            | Lexeme::Star(c)
+            | Lexeme::Bang(c)
+            | Lexeme::Less(c)
+            | Lexeme::Greater(c)
+            | Lexeme::Slash(c)
+            | Lexeme::Eq(c) => c.to_string(),
+            Lexeme::Number(s, _) => String::from(s),
+        }
+    }
+}
+
 impl From<&str> for Lexeme {
     fn from(value: &str) -> Self {
         match value {
