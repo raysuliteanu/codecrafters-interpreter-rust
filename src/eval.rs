@@ -40,15 +40,19 @@ pub type EvalResult = Result<EvalValue>;
 
 pub struct Eval<'eval> {
     source: &'eval str,
+    expression_mode: bool,
 }
 
 impl<'eval> Eval<'_> {
-    pub fn new(source: &str) -> Eval {
-        Eval { source }
+    pub fn new(source: &str, expression_mode: bool) -> Eval {
+        Eval {
+            source,
+            expression_mode,
+        }
     }
 
     pub fn evaluate(&self) -> EvalResult {
-        let parser = Parser::new(self.source, true, false);
+        let parser = Parser::new(self.source, self.expression_mode, false);
         let tree = parser.parse()?;
 
         self.eval(tree.iter())
@@ -302,13 +306,13 @@ mod tests {
     #[test]
     fn test_eval_new() {
         let source = "print 42;";
-        let eval = Eval::new(source);
+        let eval = Eval::new(source, false);
         assert_eq!(eval.source, source);
     }
 
     #[test]
     fn test_eval_terminal_number() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let token = Token {
             lexeme: Lexeme::Number("42".to_string(), 42.0),
             span: Span::new(0, 0, 1),
@@ -319,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_eval_terminal_string() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let token = Token {
             lexeme: Lexeme::String("hello".to_string()),
             span: Span::new(0, 0, 1),
@@ -330,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_eval_terminal_boolean() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
 
         let true_token = Token {
             lexeme: Lexeme::True("true".to_string()),
@@ -349,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_eval_terminal_nil() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let token = Token {
             lexeme: Lexeme::Nil("nil".to_string()),
             span: Span::new(0, 0, 1),
@@ -360,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_bang() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let bang_token = Token {
             lexeme: Lexeme::Bang('!'),
             span: Span::new(0, 0, 1),
@@ -397,7 +401,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_minus() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let minus_token = Token {
             lexeme: Lexeme::Minus('-'),
             span: Span::new(0, 0, 1),
@@ -413,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_plus_numbers() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let plus_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -436,7 +440,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_plus_strings() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let plus_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -459,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_arithmetic() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
 
         let left_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("10".to_string(), 10.0),
@@ -500,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_equality() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
 
         let left_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("5".to_string(), 5.0),
@@ -532,7 +536,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_comparison() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
 
         let left_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("10".to_string(), 10.0),
@@ -582,21 +586,21 @@ mod tests {
 
     #[test]
     fn test_evaluate_simple_expression() {
-        let eval = Eval::new("42");
+        let eval = Eval::new("42", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Number(42.0)); // Returns default from eval method
     }
 
     #[test]
     fn test_evaluate_print_statement() {
-        let eval = Eval::new("print 42;");
+        let eval = Eval::new("print 42;", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Nil);
     }
 
     #[test]
     fn test_evaluate_complex_expression() {
-        let eval = Eval::new("1 + 2 * 3");
+        let eval = Eval::new("1 + 2 * 3", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Number(7.0)); // Returns default from eval method
     }
@@ -623,7 +627,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_error_invalid_operator() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let invalid_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -643,7 +647,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_error_invalid_type() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let minus_token = Token {
             lexeme: Lexeme::Minus('-'),
             span: Span::new(0, 0, 1),
@@ -663,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_bang_invalid_type() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let bang_token = Token {
             lexeme: Lexeme::Bang('!'),
             span: Span::new(0, 0, 1),
@@ -683,7 +687,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_error_invalid_operator() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let invalid_token = Token {
             lexeme: Lexeme::Bang('!'),
             span: Span::new(0, 0, 1),
@@ -707,7 +711,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_plus_mixed_types_error() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let plus_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -731,7 +735,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_arithmetic_invalid_types() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let minus_token = Token {
             lexeme: Lexeme::Minus('-'),
             span: Span::new(0, 0, 1),
@@ -755,7 +759,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_comparison_invalid_types() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let greater_token = Token {
             lexeme: Lexeme::Greater('>'),
             span: Span::new(0, 0, 1),
@@ -779,7 +783,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_equality_different_types() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let eq_token = Token {
             lexeme: Lexeme::EqEq("==".to_string()),
             span: Span::new(0, 0, 1),
@@ -801,7 +805,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_division_by_zero() {
-        let eval = Eval::new("");
+        let eval = Eval::new("", false);
         let slash_token = Token {
             lexeme: Lexeme::Slash('/'),
             span: Span::new(0, 0, 1),

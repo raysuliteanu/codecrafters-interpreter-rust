@@ -57,7 +57,7 @@ fn main() -> Result<ExitCode> {
 
         LoxCommands::Evaluate { filename } => {
             let source = get_source(filename)?;
-            match eval::Eval::new(&source).evaluate() {
+            match eval::Eval::new(&source, true).evaluate() {
                 Ok(r) => println!("{r}"),
                 Err(e) => {
                     eprintln!("{e}");
@@ -73,7 +73,7 @@ fn main() -> Result<ExitCode> {
         LoxCommands::Run { filename } => {
             if let Some(file) = filename {
                 let source = get_source(file)?;
-                match eval::Eval::new(&source).evaluate() {
+                match eval::Eval::new(&source, false).evaluate() {
                     Ok(r) => {
                         if r != EvalValue::Nil {
                             println!("{r}");
@@ -112,7 +112,7 @@ pub fn repl() -> anyhow::Result<()> {
             break;
         }
 
-        eval::Eval::new(source).evaluate()?;
+        eval::Eval::new(source, false).evaluate()?;
     }
 
     Ok(())
