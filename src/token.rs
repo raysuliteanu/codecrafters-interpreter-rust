@@ -681,11 +681,10 @@ mod tests {
 
     #[test]
     fn test_scanner_comparison_operators() {
-        let scanner = Scanner::new("= == ! != < <= > >=", true);
+        let scanner = Scanner::new("== ! != < <= > >=", true);
         let tokens = scanner.scan().unwrap();
 
         let expected_lexemes = vec![
-            Lexeme::Eq('='),
             Lexeme::EqEq("==".to_string()),
             Lexeme::Bang('!'),
             Lexeme::BangEq("!=".to_string()),

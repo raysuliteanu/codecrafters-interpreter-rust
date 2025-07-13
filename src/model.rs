@@ -34,18 +34,18 @@ pub enum AstExpr {
     },
     // expr AND/OR expr
     Logical {
-        op: Box<Token>,
+        op: Token,
         left: Box<AstExpr>,
         right: Box<AstExpr>,
     },
     Terminal(Token),
     Group(Box<AstExpr>),
     Unary {
-        op: Box<Token>,
+        op: Token,
         exp: Box<AstExpr>,
     },
     Binary {
-        op: Box<Token>,
+        op: Token,
         left: Box<AstExpr>,
         right: Box<AstExpr>,
     },
@@ -83,12 +83,10 @@ impl Display for Ast {
 impl Display for AstExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AstExpr::Assignment { id: _, expr: _ } => todo!(),
-            AstExpr::Logical {
-                op: _,
-                left: _,
-                right: _,
-            } => todo!("logical"),
+            AstExpr::Assignment { id, expr } => write!(f, "{id} = {expr}"),
+            AstExpr::Logical { op, left, right } => {
+                write!(f, "({} {left} {right})", print_ast_token(op))
+            }
             AstExpr::Unary { op, exp } => write!(f, "({} {exp})", print_ast_token(op)),
             AstExpr::Binary { op, left, right } => {
                 write!(f, "({} {left} {right})", print_ast_token(op))
@@ -153,15 +151,14 @@ impl Display for AstStmt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AstStmt::If(cond, then_stmt, else_stmt) => {
-                writeln!(f, "if {cond} {{ {then_stmt} }}")?;
+                write!(f, "if {cond} {then_stmt}")?;
                 if let Some(else_stmt) = else_stmt {
-                    write!(f, "else {{ {else_stmt} }}")?;
+                    write!(f, " else {else_stmt}")?;
                 }
                 Ok(())
             }
             AstStmt::While(cond, body) => {
-                writeln!(f, "while {cond} {{")?;
-                writeln!(f, "{body} }}")
+                write!(f, "while {cond} {body}")
             }
             AstStmt::For => todo!(),
             AstStmt::Return(ast) => {

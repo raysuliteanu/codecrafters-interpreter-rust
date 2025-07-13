@@ -46,7 +46,7 @@ struct EvalEnv {
 }
 
 impl EvalEnv {
-    fn insert_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
+    fn upsert_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
         let init = if let Some(ev) = initializer {
             ev
         } else {
@@ -106,7 +106,7 @@ impl<'eval> Eval<'_> {
         }
     }
 
-    fn eval_stmt(&self, stmt: &'eval AstStmt) -> EvalResult {
+    fn eval_stmt(&mut self, stmt: &'eval AstStmt) -> EvalResult {
         trace!("eval_stmt");
         match stmt {
             AstStmt::Expression(expr) => self.eval_expr(expr),
@@ -118,23 +118,19 @@ impl<'eval> Eval<'_> {
         }
     }
 
-    fn eval_expr(&self, expr: &'eval AstExpr) -> EvalResult {
+    fn eval_expr(&mut self, expr: &'eval AstExpr) -> EvalResult {
         trace!("eval_expr");
         match expr {
             AstExpr::Terminal(token) => self.eval_terminal(token),
             AstExpr::Group(expr) => self.eval_expr(expr),
             AstExpr::Unary { op, exp } => self.eval_unary(op, exp),
             AstExpr::Binary { op, left, right } => self.eval_binary(op, left, right),
-            AstExpr::Assignment { id: _, expr: _ } => todo!("assignment"),
-            AstExpr::Logical {
-                op: _,
-                left: _,
-                right: _,
-            } => todo!("logical expr"),
+            AstExpr::Assignment { id, expr } => self.eval_assignment(id, expr),
+            AstExpr::Logical { op, left, right } => self.eval_logical(op, left, right),
         }
     }
 
-    fn eval_print_stmt(&self, expr: &'eval AstExpr) -> EvalResult {
+    fn eval_print_stmt(&mut self, expr: &'eval AstExpr) -> EvalResult {
         trace!("eval_print");
         let val = self.eval_expr(expr)?;
         trace!("print = {val}");
@@ -163,7 +159,7 @@ impl<'eval> Eval<'_> {
         Ok(val)
     }
 
-    fn eval_unary(&self, op: &Token, expr: &AstExpr) -> EvalResult {
+    fn eval_unary(&mut self, op: &Token, expr: &AstExpr) -> EvalResult {
         trace!("eval_unary");
         let val = self.eval_expr(expr)?;
         let result = match op.lexeme {
@@ -201,7 +197,7 @@ impl<'eval> Eval<'_> {
         Ok(result)
     }
 
-    fn eval_binary(&self, op: &Token, left: &AstExpr, right: &AstExpr) -> EvalResult {
+    fn eval_binary(&mut self, op: &Token, left: &AstExpr, right: &AstExpr) -> EvalResult {
         trace!("eval_binary");
         let left_expr = self.eval_expr(left)?;
         let right_expr = self.eval_expr(right)?;
@@ -306,7 +302,7 @@ impl<'eval> Eval<'_> {
         };
 
         if let Lexeme::Identifier(id) = &token.lexeme {
-            self.state.insert_var(id.clone(), initializer);
+            self.state.upsert_var(id.clone(), initializer);
         } else {
             panic!("invalid token {token}");
         }
@@ -316,6 +312,32 @@ impl<'eval> Eval<'_> {
 
     fn eval_identifier(&self, id: &str) -> Option<&EvalValue> {
         self.state.lookup_var(id)
+    }
+
+    fn eval_assignment(&mut self, id: &str, expr: &AstExpr) -> EvalResult {
+        if self.state.lookup_var(id).is_some() {
+            let val = self.eval_expr(expr)?;
+            self.state.upsert_var(id.to_string(), Some(val.clone()));
+            Ok(val)
+        } else {
+            Err(EvalErrors::UndefinedVar(id.to_string(), 0).into())
+        }
+    }
+
+    fn eval_logical(&mut self, op: &Token, left: &AstExpr, right: &AstExpr) -> EvalResult {
+        let left_val = self.eval_expr(left)?;
+        match op.lexeme {
+            Lexeme::Or(_) if Eval::is_truthy(&left_val) => Ok(left_val),
+            Lexeme::And(_) if !Eval::is_truthy(&left_val) => Ok(left_val),
+            _ => self.eval_expr(right),
+        }
+    }
+
+    fn is_truthy(val: &EvalValue) -> bool {
+        match val {
+            EvalValue::Number(_) | EvalValue::String(_) | EvalValue::Nil => true,
+            EvalValue::Boolean(b) => *b,
+        }
     }
 }
 
@@ -416,7 +438,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_bang() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let bang_token = Token {
             lexeme: Lexeme::Bang('!'),
             span: Span::new(0, 0, 1),
@@ -453,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_minus() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let minus_token = Token {
             lexeme: Lexeme::Minus('-'),
             span: Span::new(0, 0, 1),
@@ -469,7 +491,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_plus_numbers() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let plus_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -492,7 +514,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_plus_strings() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let plus_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -515,7 +537,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_arithmetic() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
 
         let left_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("10".to_string(), 10.0),
@@ -556,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_equality() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
 
         let left_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("5".to_string(), 5.0),
@@ -588,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_comparison() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
 
         let left_expr = AstExpr::Terminal(Token {
             lexeme: Lexeme::Number("10".to_string(), 10.0),
@@ -679,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_error_invalid_operator() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let invalid_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -699,7 +721,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_error_invalid_type() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let minus_token = Token {
             lexeme: Lexeme::Minus('-'),
             span: Span::new(0, 0, 1),
@@ -719,7 +741,7 @@ mod tests {
 
     #[test]
     fn test_eval_unary_bang_invalid_type() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let bang_token = Token {
             lexeme: Lexeme::Bang('!'),
             span: Span::new(0, 0, 1),
@@ -739,7 +761,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_error_invalid_operator() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let invalid_token = Token {
             lexeme: Lexeme::Bang('!'),
             span: Span::new(0, 0, 1),
@@ -763,7 +785,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_plus_mixed_types_error() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let plus_token = Token {
             lexeme: Lexeme::Plus('+'),
             span: Span::new(0, 0, 1),
@@ -787,7 +809,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_arithmetic_invalid_types() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let minus_token = Token {
             lexeme: Lexeme::Minus('-'),
             span: Span::new(0, 0, 1),
@@ -811,7 +833,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_comparison_invalid_types() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let greater_token = Token {
             lexeme: Lexeme::Greater('>'),
             span: Span::new(0, 0, 1),
@@ -835,7 +857,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_equality_different_types() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let eq_token = Token {
             lexeme: Lexeme::EqEq("==".to_string()),
             span: Span::new(0, 0, 1),
@@ -857,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_eval_binary_division_by_zero() {
-        let eval = Eval::new("", false);
+        let mut eval = Eval::new("", false);
         let slash_token = Token {
             lexeme: Lexeme::Slash('/'),
             span: Span::new(0, 0, 1),
