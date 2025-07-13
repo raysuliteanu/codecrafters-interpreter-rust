@@ -42,25 +42,21 @@ pub enum EvalErrors {
 pub type EvalResult = Result<EvalValue>;
 
 struct EvalEnv {
-    vars: HashMap<String, Option<EvalValue>>,
+    vars: HashMap<String, EvalValue>,
 }
 
 impl EvalEnv {
-    fn insert_var(
-        &mut self,
-        id: String,
-        initializer: Option<EvalValue>,
-    ) -> Option<Option<EvalValue>> {
-        self.vars.insert(id, initializer)
+    fn insert_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
+        let init = if let Some(ev) = initializer {
+            ev
+        } else {
+            EvalValue::Nil
+        };
+        self.vars.insert(id, init)
     }
 
-    fn lookup_var(&self, id: &str) -> Option<EvalValue> {
-        let var = self.vars.get(id);
-        if let Some(Some(ev)) = var {
-            Some(ev.clone())
-        } else {
-            None
-        }
+    fn lookup_var(&self, id: &str) -> Option<&EvalValue> {
+        self.vars.get(id)
     }
 }
 
@@ -152,11 +148,10 @@ impl<'eval> Eval<'_> {
             Lexeme::Number(_, v) => EvalValue::Number(*v),
             Lexeme::String(s) => EvalValue::String(s.to_string()),
             Lexeme::Identifier(id) => {
-                let value = self.eval_identifier(id);
-                if value == EvalValue::Nil {
-                    return Err(EvalErrors::UndefinedVar(id.clone(), token.span.line()).into());
+                if let Some(value) = self.eval_identifier(id) {
+                    value.clone()
                 } else {
-                    value
+                    return Err(EvalErrors::UndefinedVar(id.clone(), token.span.line()).into());
                 }
             }
             Lexeme::True(_) => EvalValue::Boolean(true),
@@ -319,12 +314,8 @@ impl<'eval> Eval<'_> {
         Ok(EvalValue::Nil)
     }
 
-    fn eval_identifier(&self, id: &str) -> EvalValue {
-        if let Some(value) = self.state.lookup_var(id) {
-            value
-        } else {
-            EvalValue::Nil
-        }
+    fn eval_identifier(&self, id: &str) -> Option<&EvalValue> {
+        self.state.lookup_var(id)
     }
 }
 
