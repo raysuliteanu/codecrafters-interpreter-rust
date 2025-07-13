@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use log::trace;
-use model::Ast;
 use std::{
     fs,
     io::{BufRead as _, Read, Write as _, stdin, stdout},
@@ -9,11 +8,7 @@ use std::{
     process::ExitCode,
 };
 
-use crate::{
-    eval::{EvalErrors, EvalValue},
-    parser::ParseError,
-    token::Scanner,
-};
+use crate::{eval::EvalValue, parser::ParseError, token::Scanner};
 
 mod eval;
 mod model;

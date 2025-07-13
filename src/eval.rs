@@ -1,5 +1,6 @@
 use anyhow::Result;
 use log::trace;
+use std::collections::HashMap;
 use std::fmt::Display;
 use thiserror::Error;
 
@@ -7,7 +8,7 @@ use crate::model::{Ast, AstExpr, AstStmt};
 use crate::parser::Parser;
 use crate::token::{Lexeme, Token};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum EvalValue {
     Number(f64),
     String(String),
@@ -38,9 +39,33 @@ pub enum EvalErrors {
 
 pub type EvalResult = Result<EvalValue>;
 
+struct EvalEnv {
+    vars: HashMap<String, Option<EvalValue>>,
+}
+
+impl EvalEnv {
+    fn insert_var(
+        &mut self,
+        id: String,
+        initializer: Option<EvalValue>,
+    ) -> Option<Option<EvalValue>> {
+        self.vars.insert(id, initializer)
+    }
+
+    fn lookup_var(&self, id: &str) -> Option<EvalValue> {
+        let var = self.vars.get(id);
+        if let Some(Some(ev)) = var {
+            Some(ev.clone())
+        } else {
+            None
+        }
+    }
+}
+
 pub struct Eval<'eval> {
     source: &'eval str,
     expression_mode: bool,
+    state: EvalEnv,
 }
 
 impl<'eval> Eval<'_> {
@@ -48,17 +73,20 @@ impl<'eval> Eval<'_> {
         Eval {
             source,
             expression_mode,
+            state: EvalEnv {
+                vars: HashMap::new(),
+            },
         }
     }
 
-    pub fn evaluate(&self) -> EvalResult {
+    pub fn evaluate(&mut self) -> EvalResult {
         let parser = Parser::new(self.source, self.expression_mode, false);
         let tree = parser.parse()?;
 
         self.eval(tree.iter())
     }
 
-    fn eval(&self, tree: std::slice::Iter<'_, Ast>) -> EvalResult {
+    fn eval(&mut self, tree: std::slice::Iter<'_, Ast>) -> EvalResult {
         let mut value = EvalValue::Nil;
         for ast in tree {
             value = self.eval_ast(ast)?;
@@ -68,14 +96,14 @@ impl<'eval> Eval<'_> {
         Ok(value)
     }
 
-    fn eval_ast(&self, ast: &'eval Ast) -> EvalResult {
+    fn eval_ast(&mut self, ast: &'eval Ast) -> EvalResult {
         trace!("eval_ast");
         match ast {
-            Ast::Class => todo!(),
-            Ast::Function => todo!(),
-            Ast::Variable(_token, _ast) => todo!(),
+            Ast::Class => todo!("class decl"),
+            Ast::Function => todo!("fun decl"),
+            Ast::Variable(token, ast) => self.eval_var_decl(token, ast),
             Ast::Statement(stmt) => self.eval_stmt(stmt),
-            Ast::Block(_b) => todo!(),
+            Ast::Block(_b) => todo!("block decl"),
             Ast::Expression(e) => self.eval_expr(e),
         }
     }
@@ -121,7 +149,7 @@ impl<'eval> Eval<'_> {
         let val = match &token.lexeme {
             Lexeme::Number(_, v) => EvalValue::Number(*v),
             Lexeme::String(s) => EvalValue::String(s.to_string()),
-            Lexeme::Identifier(_i) => todo!("identifier"),
+            Lexeme::Identifier(id) => self.eval_identifier(id),
             Lexeme::True(_) => EvalValue::Boolean(true),
             Lexeme::False(_) => EvalValue::Boolean(false),
             Lexeme::Nil(_) => EvalValue::Nil,
@@ -264,6 +292,30 @@ impl<'eval> Eval<'_> {
         };
 
         Ok(result)
+    }
+
+    fn eval_var_decl(&mut self, token: &Token, ast: &Option<Box<AstExpr>>) -> EvalResult {
+        let initializer = if let Some(expr) = ast {
+            Some(self.eval_expr(expr)?)
+        } else {
+            None
+        };
+
+        if let Lexeme::Identifier(id) = &token.lexeme {
+            self.state.insert_var(id.clone(), initializer);
+        } else {
+            panic!("invalid token {token}");
+        }
+
+        Ok(EvalValue::Nil)
+    }
+
+    fn eval_identifier(&self, id: &str) -> EvalValue {
+        if let Some(value) = self.state.lookup_var(id) {
+            value
+        } else {
+            EvalValue::Nil
+        }
     }
 }
 
@@ -586,21 +638,21 @@ mod tests {
 
     #[test]
     fn test_evaluate_simple_expression() {
-        let eval = Eval::new("42", true);
+        let mut eval = Eval::new("42", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Number(42.0)); // Returns default from eval method
     }
 
     #[test]
     fn test_evaluate_print_statement() {
-        let eval = Eval::new("print 42;", true);
+        let mut eval = Eval::new("print 42;", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Nil);
     }
 
     #[test]
     fn test_evaluate_complex_expression() {
-        let eval = Eval::new("1 + 2 * 3", true);
+        let mut eval = Eval::new("1 + 2 * 3", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Number(7.0)); // Returns default from eval method
     }

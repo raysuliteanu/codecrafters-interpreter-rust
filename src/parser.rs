@@ -190,7 +190,7 @@ impl<'parser> Parser<'parser> {
                 }
                 _ => ast_expected_token!(t, lexeme_from("identifier")),
             },
-            _ => todo!("unexpected eof"),
+            _ => Err(ParseError::UnexpectedEof.into()),
         }
     }
 
