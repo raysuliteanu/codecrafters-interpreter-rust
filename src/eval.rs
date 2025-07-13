@@ -35,6 +35,8 @@ pub enum EvalErrors {
     InvalidBinaryOp { op: Lexeme },
     #[error("Operands must be two numbers or two strings.")]
     StringsOrNumbers,
+    #[error("Undefined variable '{0}'.\n[line {1}]")]
+    UndefinedVar(String, usize),
 }
 
 pub type EvalResult = Result<EvalValue>;
@@ -149,7 +151,14 @@ impl<'eval> Eval<'_> {
         let val = match &token.lexeme {
             Lexeme::Number(_, v) => EvalValue::Number(*v),
             Lexeme::String(s) => EvalValue::String(s.to_string()),
-            Lexeme::Identifier(id) => self.eval_identifier(id),
+            Lexeme::Identifier(id) => {
+                let value = self.eval_identifier(id);
+                if value == EvalValue::Nil {
+                    return Err(EvalErrors::UndefinedVar(id.clone(), token.span.line()).into());
+                } else {
+                    value
+                }
+            }
             Lexeme::True(_) => EvalValue::Boolean(true),
             Lexeme::False(_) => EvalValue::Boolean(false),
             Lexeme::Nil(_) => EvalValue::Nil,
