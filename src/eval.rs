@@ -177,10 +177,12 @@ impl<'eval> Eval<'_> {
         match stmt {
             AstStmt::Expression(expr) => self.eval_expr(expr),
             AstStmt::Print(ast) => self.eval_print_stmt(ast),
-            AstStmt::For => todo!(),
-            AstStmt::If(_ast, _ast1, _ast2) => todo!(),
-            AstStmt::Return(_ast) => todo!(),
-            AstStmt::While(_ast, _ast1) => todo!(),
+            AstStmt::For => todo!("for stmts"),
+            AstStmt::If(cond, then_block, else_block) => {
+                self.eval_if_stmt(cond, then_block, else_block)
+            }
+            AstStmt::Return(_ast) => todo!("return stmts"),
+            AstStmt::While(_ast, _ast1) => todo!("while stmts"),
         }
     }
 
@@ -445,6 +447,30 @@ impl<'eval> Eval<'_> {
         //     result = self.eval_ast(&ast)?;
         // }
         // Ok(result)
+    }
+
+    fn eval_if_stmt(
+        &mut self,
+        cond: &AstExpr,
+        then_block: &Ast,
+        else_block: &Option<Box<Ast>>,
+    ) -> EvalResult {
+        let cond_result = self.eval_expr(cond)?;
+        if Eval::is_truthy(&cond_result) {
+            match then_block {
+                Ast::Block(asts) => self.eval_block(asts),
+                Ast::Statement(ast_stmt) => self.eval_stmt(ast_stmt),
+                _ => todo!("then block not block or statement"),
+            }
+        } else if let Some(ast) = else_block {
+            match ast.as_ref() {
+                Ast::Block(block) => self.eval_block(block),
+                Ast::Statement(stmt) => self.eval_stmt(stmt),
+                _ => todo!("then block not block or statement"),
+            }
+        } else {
+            Ok(EvalValue::Nil)
+        }
     }
 }
 
