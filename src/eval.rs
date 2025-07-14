@@ -399,18 +399,30 @@ impl<'eval> Eval<'_> {
     }
 
     fn eval_logical(&mut self, op: &Token, left: &AstExpr, right: &AstExpr) -> EvalResult {
+        trace!("eval_logical: {}", op.lexeme);
         let left_val = self.eval_expr(left)?;
+        trace!("left = {left_val}");
         match op.lexeme {
-            Lexeme::Or(_) if Eval::is_truthy(&left_val) => Ok(left_val),
-            Lexeme::And(_) if !Eval::is_truthy(&left_val) => Ok(left_val),
-            _ => self.eval_expr(right),
+            Lexeme::Or(_) if Eval::is_truthy(&left_val) => {
+                trace!("OR returning {left_val}");
+                Ok(left_val)
+            }
+            Lexeme::And(_) if !Eval::is_truthy(&left_val) => {
+                trace!("AND returning {left_val}");
+                Ok(left_val)
+            }
+            _ => {
+                trace!("evaluating right expr of {}", op.lexeme);
+                self.eval_expr(right)
+            }
         }
     }
 
     fn is_truthy(val: &EvalValue) -> bool {
         match val {
-            EvalValue::Number(_) | EvalValue::String(_) | EvalValue::Nil => true,
             EvalValue::Boolean(b) => *b,
+            EvalValue::Nil => false,
+            _ => true,
         }
     }
 
@@ -1095,5 +1107,199 @@ mod tests {
         let mut eval = Eval::new("true and false", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Boolean(false));
+    }
+
+    #[test]
+    fn test_eval_logical_or_with_numbers() {
+        let mut eval = Eval::new("0 or 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(0.0));
+    }
+
+    #[test]
+    fn test_eval_logical_or_with_truthy_number() {
+        let mut eval = Eval::new("42 or 0", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_or_with_strings() {
+        let mut eval = Eval::new("\"\" or \"hello\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("".to_string()));
+    }
+
+    #[test]
+    fn test_eval_logical_or_with_truthy_string() {
+        let mut eval = Eval::new("\"hello\" or \"world\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_eval_logical_or_with_nil() {
+        let mut eval = Eval::new("nil or 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_or_with_truthy_nil() {
+        let mut eval = Eval::new("42 or nil", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_or_both_falsy() {
+        let mut eval = Eval::new("nil or false", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(false));
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_numbers() {
+        let mut eval = Eval::new("42 and 0", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(0.0));
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_falsy_number() {
+        let mut eval = Eval::new("0 and 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_strings() {
+        let mut eval = Eval::new("\"hello\" and \"world\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("world".to_string()));
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_empty_string() {
+        let mut eval = Eval::new("\"\" and \"hello\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_nil() {
+        let mut eval = Eval::new("nil and 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Nil);
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_truthy_nil() {
+        let mut eval = Eval::new("42 and nil", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Nil);
+    }
+
+    #[test]
+    fn test_eval_logical_and_with_false() {
+        let mut eval = Eval::new("false and 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(false));
+    }
+
+    #[test]
+    fn test_eval_logical_and_both_truthy() {
+        let mut eval = Eval::new("42 and \"hello\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_is_truthy_function() {
+        assert!(Eval::is_truthy(&EvalValue::Boolean(true)));
+        assert!(!Eval::is_truthy(&EvalValue::Boolean(false)));
+        assert!(!Eval::is_truthy(&EvalValue::Nil));
+        assert!(Eval::is_truthy(&EvalValue::Number(42.0)));
+        assert!(Eval::is_truthy(&EvalValue::Number(0.0)));
+        assert!(Eval::is_truthy(&EvalValue::Number(-1.0)));
+        assert!(Eval::is_truthy(&EvalValue::String("hello".to_string())));
+        assert!(Eval::is_truthy(&EvalValue::String("".to_string())));
+    }
+
+    #[test]
+    fn test_eval_logical_chained_or() {
+        let mut eval = Eval::new("false or nil or \"hello\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_eval_logical_chained_and() {
+        let mut eval = Eval::new("true and 42 and \"hello\"", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::String("hello".to_string()));
+    }
+
+    #[test]
+    fn test_eval_logical_mixed_operations() {
+        let mut eval = Eval::new("false or true and 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_mixed_operations_with_parentheses() {
+        let mut eval = Eval::new("(false or true) and 42", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_complex_expression() {
+        let mut eval = Eval::new("nil or false or (true and 42)", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(42.0));
+    }
+
+    #[test]
+    fn test_eval_logical_with_equality() {
+        let mut eval = Eval::new("5 == 5 or false", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(true));
+    }
+
+    #[test]
+    fn test_eval_logical_with_comparison() {
+        let mut eval = Eval::new("5 > 3 and 10 < 20", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(true));
+    }
+
+    #[test]
+    fn test_eval_logical_or_short_circuit_no_evaluation() {
+        let mut eval = Eval::new("var x = 5; true or (x = 10)", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(true));
+    }
+
+    #[test]
+    fn test_eval_logical_and_short_circuit_no_evaluation() {
+        let mut eval = Eval::new("var x = 5; false and (x = 10)", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(false));
+    }
+
+    #[test]
+    fn test_eval_logical_or_evaluates_right_side() {
+        let mut eval = Eval::new("var x = 5; nil or x", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(5.0));
+    }
+
+    #[test]
+    fn test_eval_logical_and_evaluates_right_side() {
+        let mut eval = Eval::new("var x = 5; true and x", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(5.0));
     }
 }
