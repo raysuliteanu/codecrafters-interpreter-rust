@@ -145,7 +145,15 @@ impl<'parser> Parser<'parser> {
                 Lexeme::Class(_) => self.class_decl(tokens),
                 Lexeme::Fun(_) => self.fun_decl(tokens),
                 Lexeme::Var(_) => self.var_decl(tokens),
-                _ => self.statement(tokens),
+                _ => {
+                    let ast = if self.expression_mode {
+                        Ast::Expression(self.expression(tokens)?)
+                    } else {
+                        self.statement(tokens)?
+                    };
+
+                    Ok(ast)
+                }
             }
         } else {
             Err(ParseError::UnexpectedEof.into())
@@ -206,12 +214,7 @@ impl<'parser> Parser<'parser> {
                 crate::token::Lexeme::Return(_) => self.return_stmt(tokens),
                 crate::token::Lexeme::While(_) => self.while_stmt(tokens),
                 _ => {
-                    let ast = if self.expression_mode {
-                        Ast::Expression(self.expression(tokens)?)
-                    } else {
-                        self.expression_statement(tokens)?
-                    };
-
+                    let ast = self.expression_statement(tokens)?;
                     Ok(ast)
                 }
             },
@@ -221,8 +224,21 @@ impl<'parser> Parser<'parser> {
     }
 
     fn parse_block(&self, tokens: &mut PeekableTokenIter) -> ParseResult<Ast> {
-        trace!("block_stmt: {:?}", tokens.peek());
-        todo!("parse block")
+        let left_brace_token = tokens.next().unwrap();
+        assert_eq!(left_brace_token.lexeme, lexeme_from("{"));
+        trace!("block start");
+
+        let mut stmts = vec![];
+        while tokens.peek().is_some_and(|t| t.lexeme != lexeme_from("}")) {
+            let stmt = self.declaration(tokens)?;
+            stmts.push(stmt);
+        }
+
+        let right_brace_token = tokens.next().unwrap();
+        assert_eq!(right_brace_token.lexeme, lexeme_from("}"));
+        trace!("block end");
+
+        Ok(Ast::Block(stmts))
     }
 
     fn for_stmt(&self, tokens: &mut PeekableTokenIter) -> ParseResult<Ast> {
@@ -613,7 +629,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_print_statement() {
-        let parser = Parser::new("print 42;", true, true);
+        let parser = Parser::new("print 42;", false, true);
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
@@ -623,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_parse_return_statement_with_value() {
-        let parser = Parser::new("return 123;", true, true);
+        let parser = Parser::new("return 123;", false, true);
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
@@ -633,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_parse_return_statement_without_value() {
-        let parser = Parser::new("return;", true, true);
+        let parser = Parser::new("return;", false, true);
         let result = parser.parse();
         assert!(result.is_ok());
         let ast = result.unwrap();
@@ -862,7 +878,10 @@ mod tests {
         assert!(result.is_ok());
         let ast = result.unwrap();
         assert_eq!(ast.len(), 1);
-        assert_eq!(ast[0].to_string(), "if (group false) print 1.0; else print 2.0;");
+        assert_eq!(
+            ast[0].to_string(),
+            "if (group false) print 1.0; else print 2.0;"
+        );
     }
 
     #[test]
@@ -873,5 +892,45 @@ mod tests {
         let ast = result.unwrap();
         assert_eq!(ast.len(), 1);
         assert_eq!(ast[0].to_string(), "while (group true) print 42.0;");
+    }
+
+    #[test]
+    fn test_parse_empty_block() {
+        let parser = Parser::new("{}", false, true);
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.len(), 1);
+        assert_eq!(ast[0].to_string(), "{\n}\n");
+    }
+
+    #[test]
+    fn test_parse_block_with_statements() {
+        let parser = Parser::new("{ print 1; print 2; }", false, true);
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.len(), 1);
+        assert_eq!(ast[0].to_string(), "{\nprint 1.0;print 2.0;}\n");
+    }
+
+    #[test]
+    fn test_parse_nested_blocks() {
+        let parser = Parser::new("{ { print 42; } }", false, true);
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.len(), 1);
+        assert_eq!(ast[0].to_string(), "{\n{\nprint 42.0;}\n}\n");
+    }
+
+    #[test]
+    fn test_parse_block_with_variable_declaration() {
+        let parser = Parser::new("{ var x = 10; print x; }", false, true);
+        let result = parser.parse();
+        assert!(result.is_ok());
+        let ast = result.unwrap();
+        assert_eq!(ast.len(), 1);
+        assert_eq!(ast[0].to_string(), "{\nvar x = 10.0;print x;}\n");
     }
 }

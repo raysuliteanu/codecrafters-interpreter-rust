@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use log::trace;
 use std::{
     fs,
-    io::{BufRead as _, Read, Write as _, stdin, stdout},
+    io::{BufRead as _, Write as _, stdout},
     path::PathBuf,
     process::ExitCode,
 };

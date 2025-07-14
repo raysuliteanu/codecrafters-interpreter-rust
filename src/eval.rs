@@ -1,6 +1,6 @@
 use anyhow::Result;
 use log::trace;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Display;
 use thiserror::Error;
 
@@ -41,11 +41,16 @@ pub enum EvalErrors {
 
 pub type EvalResult = Result<EvalValue>;
 
+#[derive(Default)]
 struct EvalEnv {
     vars: HashMap<String, EvalValue>,
 }
 
 impl EvalEnv {
+    fn new() -> Self {
+        EvalEnv::default()
+    }
+
     fn upsert_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
         let init = if let Some(ev) = initializer {
             ev
@@ -60,10 +65,59 @@ impl EvalEnv {
     }
 }
 
+type Stack<T> = VecDeque<T>;
+
+struct EvalState {
+    env: Stack<EvalEnv>,
+}
+
+impl EvalState {
+    fn new() -> Self {
+        let mut env = Stack::new();
+        env.push_front(EvalEnv::new());
+        EvalState { env }
+    }
+
+    fn upsert_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
+        // first see if the var exists somewhere in the state stack,
+        // and if so, update it
+        for env in self.env.iter_mut() {
+            if env.vars.contains_key(&id) {
+                let v = env.upsert_var(id, initializer);
+                return v;
+            }
+        }
+
+        // otherwise add the var to the environment at the top of the stack
+        self.env
+            .front_mut()
+            .expect("should always have a 'global' env")
+            .upsert_var(id, initializer)
+    }
+
+    fn lookup_var(&self, id: &str) -> Option<&EvalValue> {
+        for env in &self.env {
+            if env.vars.contains_key(id) {
+                return env.lookup_var(id);
+            }
+        }
+
+        None
+    }
+
+    fn push(&mut self) {
+        self.env.push_front(EvalEnv::new());
+    }
+
+    fn pop(&mut self) {
+        self.env.pop_front();
+    }
+}
+
 pub struct Eval<'eval> {
     source: &'eval str,
     expression_mode: bool,
-    state: EvalEnv,
+    state: EvalState,
 }
 
 impl<'eval> Eval<'_> {
@@ -71,9 +125,7 @@ impl<'eval> Eval<'_> {
         Eval {
             source,
             expression_mode,
-            state: EvalEnv {
-                vars: HashMap::new(),
-            },
+            state: EvalState::new(),
         }
     }
 
@@ -101,7 +153,7 @@ impl<'eval> Eval<'_> {
             Ast::Function => todo!("fun decl"),
             Ast::Variable(token, ast) => self.eval_var_decl(token, ast),
             Ast::Statement(stmt) => self.eval_stmt(stmt),
-            Ast::Block(_b) => todo!("block decl"),
+            Ast::Block(block) => self.eval_block(block),
             Ast::Expression(e) => self.eval_expr(e),
         }
     }
@@ -338,6 +390,41 @@ impl<'eval> Eval<'_> {
             EvalValue::Number(_) | EvalValue::String(_) | EvalValue::Nil => true,
             EvalValue::Boolean(b) => *b,
         }
+    }
+
+    fn eval_block(&mut self, block: &[Ast]) -> EvalResult {
+        self.state.push();
+
+        // Use a closure to ensure pop() is always called
+        let result = (|| {
+            let mut value = EvalValue::Nil;
+            for ast in block {
+                value = self.eval_ast(ast)?;
+            }
+            Ok(value)
+        })();
+
+        self.state.pop();
+        result
+
+        // Alternative approach using RAII guard pattern for future reference:
+        //
+        // self.state.push();
+        //
+        // // Create a guard that will pop on drop
+        // struct ScopeGuard<'a>(&'a mut EvalState);
+        // impl Drop for ScopeGuard<'_> {
+        //     fn drop(&mut self) {
+        //         self.0.pop();
+        //     }
+        // }
+        // let _guard = ScopeGuard(&mut self.state);
+        //
+        // let mut result = EvalValue::Nil;
+        // for ast in block {
+        //     result = self.eval_ast(&ast)?;
+        // }
+        // Ok(result)
     }
 }
 
@@ -667,7 +754,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_print_statement() {
-        let mut eval = Eval::new("print 42;", true);
+        let mut eval = Eval::new("print 42;", false);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Nil);
     }
@@ -899,5 +986,68 @@ mod tests {
             .eval_binary(&slash_token, &left_expr, &right_expr)
             .unwrap();
         assert_eq!(result, EvalValue::Number(f64::INFINITY));
+    }
+
+    #[test]
+    fn test_eval_variable_declaration_without_initializer() {
+        let mut eval = Eval::new("var x;", false);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Nil);
+    }
+
+    #[test]
+    fn test_eval_variable_declaration_with_initializer() {
+        let mut eval = Eval::new("var x = 42;", false);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Nil);
+    }
+
+    #[test]
+    fn test_eval_variable_usage() {
+        let mut eval = Eval::new("var x = 42; print x;", false);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Nil);
+    }
+
+    #[test]
+    fn test_eval_assignment_expression() {
+        let mut eval = Eval::new("var x = 10; x = 20;", false);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Number(20.0));
+    }
+
+    #[test]
+    fn test_eval_assignment_undefined_variable() {
+        let mut eval = Eval::new("x = 10;", false);
+        let result = eval.evaluate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_eval_logical_or_short_circuit() {
+        let mut eval = Eval::new("true or false", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(true));
+    }
+
+    #[test]
+    fn test_eval_logical_and_short_circuit() {
+        let mut eval = Eval::new("false and true", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(false));
+    }
+
+    #[test]
+    fn test_eval_logical_or_no_short_circuit() {
+        let mut eval = Eval::new("false or true", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(true));
+    }
+
+    #[test]
+    fn test_eval_logical_and_no_short_circuit() {
+        let mut eval = Eval::new("true and false", true);
+        let result = eval.evaluate().unwrap();
+        assert_eq!(result, EvalValue::Boolean(false));
     }
 }

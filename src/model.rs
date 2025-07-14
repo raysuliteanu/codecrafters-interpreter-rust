@@ -9,7 +9,7 @@ pub enum Ast {
     Function,
     // name, initializer
     Variable(Token, Option<Box<AstExpr>>),
-    Block(Vec<AstStmt>),
+    Block(Vec<Ast>),
     Statement(AstStmt),
     Expression(AstExpr),
 }
