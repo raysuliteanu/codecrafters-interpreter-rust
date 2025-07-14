@@ -63,6 +63,10 @@ impl EvalEnv {
     fn lookup_var(&self, id: &str) -> Option<&EvalValue> {
         self.vars.get(id)
     }
+
+    fn lookup_var_mut(&mut self, id: &str) -> Option<&mut EvalValue> {
+        self.vars.get_mut(id)
+    }
 }
 
 type Stack<T> = VecDeque<T>;
@@ -78,24 +82,14 @@ impl EvalState {
         EvalState { env }
     }
 
-    fn upsert_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
-        // first see if the var exists somewhere in the state stack,
-        // and if so, update it
-        for env in self.env.iter_mut() {
-            if env.vars.contains_key(&id) {
-                let v = env.upsert_var(id, initializer);
-                return v;
-            }
-        }
-
-        // otherwise add the var to the environment at the top of the stack
+    fn add_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
         self.env
             .front_mut()
-            .expect("should always have a 'global' env")
+            .expect("always at least a global env")
             .upsert_var(id, initializer)
     }
 
-    fn lookup_var(&self, id: &str) -> Option<&EvalValue> {
+    fn var_value(&self, id: &str) -> Option<&EvalValue> {
         for env in &self.env {
             if env.vars.contains_key(id) {
                 return env.lookup_var(id);
@@ -103,6 +97,26 @@ impl EvalState {
         }
 
         None
+    }
+
+    fn var_value_mut(&mut self, id: &str) -> Option<&mut EvalValue> {
+        for env in &mut self.env {
+            if env.vars.contains_key(id) {
+                return env.lookup_var_mut(id);
+            }
+        }
+
+        None
+    }
+
+    fn var_exists(&self, id: &str) -> bool {
+        for env in &self.env {
+            if env.vars.contains_key(id) {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn push(&mut self) {
@@ -346,6 +360,7 @@ impl<'eval> Eval<'_> {
         Ok(result)
     }
 
+    // var some_var [= expr] ;
     fn eval_var_decl(&mut self, token: &Token, ast: &Option<Box<AstExpr>>) -> EvalResult {
         let initializer = if let Some(expr) = ast {
             Some(self.eval_expr(expr)?)
@@ -354,7 +369,7 @@ impl<'eval> Eval<'_> {
         };
 
         if let Lexeme::Identifier(id) = &token.lexeme {
-            self.state.upsert_var(id.clone(), initializer);
+            self.state.add_var(id.clone(), initializer);
         } else {
             panic!("invalid token {token}");
         }
@@ -363,16 +378,21 @@ impl<'eval> Eval<'_> {
     }
 
     fn eval_identifier(&self, id: &str) -> Option<&EvalValue> {
-        self.state.lookup_var(id)
+        self.state.var_value(id)
     }
 
+    // some_var = expr
     fn eval_assignment(&mut self, id: &str, expr: &AstExpr) -> EvalResult {
-        if self.state.lookup_var(id).is_some() {
-            let val = self.eval_expr(expr)?;
-            self.state.upsert_var(id.to_string(), Some(val.clone()));
-            Ok(val)
-        } else {
+        if !self.state.var_exists(id) {
             Err(EvalErrors::UndefinedVar(id.to_string(), 0).into())
+        } else {
+            let new_val = self.eval_expr(expr)?;
+            let val = self
+                .state
+                .var_value_mut(id)
+                .expect("already checked the var exists");
+            *val = new_val;
+            Ok(val.clone())
         }
     }
 
