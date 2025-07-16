@@ -182,7 +182,7 @@ impl<'eval> Eval<'_> {
                 self.eval_if_stmt(cond, then_block, else_block)
             }
             AstStmt::Return(_ast) => todo!("return stmts"),
-            AstStmt::While(_ast, _ast1) => todo!("while stmts"),
+            AstStmt::While(cond, body) => self.eval_while(cond, body),
         }
     }
 
@@ -218,9 +218,9 @@ impl<'eval> Eval<'_> {
                     return Err(EvalErrors::UndefinedVar(id.clone(), token.span.line()).into());
                 }
             }
-            Lexeme::True(_) => EvalValue::Boolean(true),
-            Lexeme::False(_) => EvalValue::Boolean(false),
-            Lexeme::Nil(_) => EvalValue::Nil,
+            Lexeme::True => EvalValue::Boolean(true),
+            Lexeme::False => EvalValue::Boolean(false),
+            Lexeme::Nil => EvalValue::Nil,
             _ => unimplemented!("{}", token.lexeme),
         };
 
@@ -231,7 +231,7 @@ impl<'eval> Eval<'_> {
         trace!("eval_unary");
         let val = self.eval_expr(expr)?;
         let result = match op.lexeme {
-            Lexeme::Bang(_) => match val {
+            Lexeme::Bang => match val {
                 EvalValue::Number(_) => EvalValue::Boolean(false),
                 EvalValue::Boolean(v) => EvalValue::Boolean(!v),
                 EvalValue::Nil => EvalValue::Boolean(true),
@@ -243,7 +243,7 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::Minus(_) => match val {
+            Lexeme::Minus => match val {
                 EvalValue::Number(v) => EvalValue::Number(-v),
                 _ => {
                     return Err(EvalErrors::InvalidUnaryOp {
@@ -270,12 +270,12 @@ impl<'eval> Eval<'_> {
         let left_expr = self.eval_expr(left)?;
         let right_expr = self.eval_expr(right)?;
         let result = match op.lexeme {
-            Lexeme::Plus(_) => match (left_expr, right_expr) {
+            Lexeme::Plus => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Number(l + r),
                 (EvalValue::String(l), EvalValue::String(r)) => EvalValue::String(l + &r),
                 _ => return Err(EvalErrors::StringsOrNumbers.into()),
             },
-            Lexeme::Minus(_) => match (left_expr, right_expr) {
+            Lexeme::Minus => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Number(l - r),
                 _ => {
                     return Err(EvalErrors::InvalidBinaryOp {
@@ -284,7 +284,7 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::Star(_) => match (left_expr, right_expr) {
+            Lexeme::Star => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Number(l * r),
                 _ => {
                     return Err(EvalErrors::InvalidBinaryOp {
@@ -293,7 +293,7 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::Slash(_) => match (left_expr, right_expr) {
+            Lexeme::Slash => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Number(l / r),
                 _ => {
                     return Err(EvalErrors::InvalidBinaryOp {
@@ -302,19 +302,19 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::EqEq(_) => match (left_expr, right_expr) {
+            Lexeme::EqEq => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l == r),
                 (EvalValue::String(l), EvalValue::String(r)) => EvalValue::Boolean(l == r),
                 (EvalValue::Boolean(l), EvalValue::Boolean(r)) => EvalValue::Boolean(l == r),
                 _ => EvalValue::Boolean(false),
             },
-            Lexeme::BangEq(_) => match (left_expr, right_expr) {
+            Lexeme::BangEq => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l != r),
                 (EvalValue::String(l), EvalValue::String(r)) => EvalValue::Boolean(l != r),
                 (EvalValue::Boolean(l), EvalValue::Boolean(r)) => EvalValue::Boolean(l != r),
                 _ => EvalValue::Boolean(true),
             },
-            Lexeme::Less(_) => match (left_expr, right_expr) {
+            Lexeme::Less => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l < r),
                 _ => {
                     return Err(EvalErrors::InvalidBinaryOp {
@@ -323,7 +323,7 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::LessEq(_) => match (left_expr, right_expr) {
+            Lexeme::LessEq => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l <= r),
 
                 _ => {
@@ -333,7 +333,7 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::Greater(_) => match (left_expr, right_expr) {
+            Lexeme::Greater => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l > r),
                 _ => {
                     return Err(EvalErrors::InvalidBinaryOp {
@@ -342,7 +342,7 @@ impl<'eval> Eval<'_> {
                     .into());
                 }
             },
-            Lexeme::GreaterEq(_) => match (left_expr, right_expr) {
+            Lexeme::GreaterEq => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Boolean(l >= r),
                 _ => {
                     return Err(EvalErrors::InvalidBinaryOp {
@@ -403,11 +403,11 @@ impl<'eval> Eval<'_> {
         let left_val = self.eval_expr(left)?;
         trace!("left = {left_val}");
         match op.lexeme {
-            Lexeme::Or(_) if Eval::is_truthy(&left_val) => {
+            Lexeme::Or if Eval::is_truthy(&left_val) => {
                 trace!("OR returning {left_val}");
                 Ok(left_val)
             }
-            Lexeme::And(_) if !Eval::is_truthy(&left_val) => {
+            Lexeme::And if !Eval::is_truthy(&left_val) => {
                 trace!("AND returning {left_val}");
                 Ok(left_val)
             }
@@ -427,6 +427,7 @@ impl<'eval> Eval<'_> {
     }
 
     fn eval_block(&mut self, block: &[Ast]) -> EvalResult {
+        trace!("eval_block");
         self.state.push();
 
         // Use a closure to ensure pop() is always called
@@ -467,14 +468,17 @@ impl<'eval> Eval<'_> {
         then_block: &Ast,
         else_block: &Option<Box<Ast>>,
     ) -> EvalResult {
+        trace!("eval_if");
         let cond_result = self.eval_expr(cond)?;
         if Eval::is_truthy(&cond_result) {
+            trace!("eval_if:then");
             match then_block {
                 Ast::Block(asts) => self.eval_block(asts),
                 Ast::Statement(ast_stmt) => self.eval_stmt(ast_stmt),
                 _ => todo!("then block not block or statement"),
             }
         } else if let Some(ast) = else_block {
+            trace!("eval_if:else");
             match ast.as_ref() {
                 Ast::Block(block) => self.eval_block(block),
                 Ast::Statement(stmt) => self.eval_stmt(stmt),
@@ -483,6 +487,23 @@ impl<'eval> Eval<'_> {
         } else {
             Ok(EvalValue::Nil)
         }
+    }
+
+    fn eval_while(&mut self, cond: &AstExpr, body: &Ast) -> EvalResult {
+        trace!("eval_while");
+        loop {
+            if Eval::is_truthy(&self.eval_expr(cond)?) {
+                match body {
+                    Ast::Block(asts) => self.eval_block(asts)?,
+                    Ast::Statement(ast_stmt) => self.eval_stmt(ast_stmt)?,
+                    _ => todo!("then block not block or statement"),
+                }
+            } else {
+                break;
+            };
+        }
+
+        Ok(EvalValue::Nil)
     }
 }
 
@@ -556,14 +577,14 @@ mod tests {
         let eval = Eval::new("", false);
 
         let true_token = Token {
-            lexeme: Lexeme::True("true".to_string()),
+            lexeme: Lexeme::True,
             span: Span::new(0, 0, 1),
         };
         let result = eval.eval_terminal(&true_token).unwrap();
         assert_eq!(result, EvalValue::Boolean(true));
 
         let false_token = Token {
-            lexeme: Lexeme::False("false".to_string()),
+            lexeme: Lexeme::False,
             span: Span::new(0, 0, 1),
         };
         let result = eval.eval_terminal(&false_token).unwrap();
@@ -574,7 +595,7 @@ mod tests {
     fn test_eval_terminal_nil() {
         let eval = Eval::new("", false);
         let token = Token {
-            lexeme: Lexeme::Nil("nil".to_string()),
+            lexeme: Lexeme::Nil,
             span: Span::new(0, 0, 1),
         };
         let result = eval.eval_terminal(&token).unwrap();
@@ -585,26 +606,26 @@ mod tests {
     fn test_eval_unary_bang() {
         let mut eval = Eval::new("", false);
         let bang_token = Token {
-            lexeme: Lexeme::Bang('!'),
+            lexeme: Lexeme::Bang,
             span: Span::new(0, 0, 1),
         };
 
         let true_expr = AstExpr::Terminal(Token {
-            lexeme: Lexeme::True("true".to_string()),
+            lexeme: Lexeme::True,
             span: Span::new(0, 0, 1),
         });
         let result = eval.eval_unary(&bang_token, &true_expr).unwrap();
         assert_eq!(result, EvalValue::Boolean(false));
 
         let false_expr = AstExpr::Terminal(Token {
-            lexeme: Lexeme::False("false".to_string()),
+            lexeme: Lexeme::False,
             span: Span::new(0, 0, 1),
         });
         let result = eval.eval_unary(&bang_token, &false_expr).unwrap();
         assert_eq!(result, EvalValue::Boolean(true));
 
         let nil_expr = AstExpr::Terminal(Token {
-            lexeme: Lexeme::Nil("nil".to_string()),
+            lexeme: Lexeme::Nil,
             span: Span::new(0, 0, 1),
         });
         let result = eval.eval_unary(&bang_token, &nil_expr).unwrap();
@@ -622,7 +643,7 @@ mod tests {
     fn test_eval_unary_minus() {
         let mut eval = Eval::new("", false);
         let minus_token = Token {
-            lexeme: Lexeme::Minus('-'),
+            lexeme: Lexeme::Minus,
             span: Span::new(0, 0, 1),
         };
 
@@ -638,7 +659,7 @@ mod tests {
     fn test_eval_binary_plus_numbers() {
         let mut eval = Eval::new("", false);
         let plus_token = Token {
-            lexeme: Lexeme::Plus('+'),
+            lexeme: Lexeme::Plus,
             span: Span::new(0, 0, 1),
         };
 
@@ -661,7 +682,7 @@ mod tests {
     fn test_eval_binary_plus_strings() {
         let mut eval = Eval::new("", false);
         let plus_token = Token {
-            lexeme: Lexeme::Plus('+'),
+            lexeme: Lexeme::Plus,
             span: Span::new(0, 0, 1),
         };
 
@@ -694,7 +715,7 @@ mod tests {
         });
 
         let minus_token = Token {
-            lexeme: Lexeme::Minus('-'),
+            lexeme: Lexeme::Minus,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -703,7 +724,7 @@ mod tests {
         assert_eq!(result, EvalValue::Number(5.0));
 
         let star_token = Token {
-            lexeme: Lexeme::Star('*'),
+            lexeme: Lexeme::Star,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -712,7 +733,7 @@ mod tests {
         assert_eq!(result, EvalValue::Number(50.0));
 
         let slash_token = Token {
-            lexeme: Lexeme::Slash('/'),
+            lexeme: Lexeme::Slash,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -735,7 +756,7 @@ mod tests {
         });
 
         let eq_token = Token {
-            lexeme: Lexeme::EqEq("==".to_string()),
+            lexeme: Lexeme::EqEq,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -744,7 +765,7 @@ mod tests {
         assert_eq!(result, EvalValue::Boolean(true));
 
         let ne_token = Token {
-            lexeme: Lexeme::BangEq("!=".to_string()),
+            lexeme: Lexeme::BangEq,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -767,7 +788,7 @@ mod tests {
         });
 
         let greater_token = Token {
-            lexeme: Lexeme::Greater('>'),
+            lexeme: Lexeme::Greater,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -776,7 +797,7 @@ mod tests {
         assert_eq!(result, EvalValue::Boolean(true));
 
         let greater_eq_token = Token {
-            lexeme: Lexeme::GreaterEq(">=".to_string()),
+            lexeme: Lexeme::GreaterEq,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -785,7 +806,7 @@ mod tests {
         assert_eq!(result, EvalValue::Boolean(true));
 
         let less_token = Token {
-            lexeme: Lexeme::Less('<'),
+            lexeme: Lexeme::Less,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -794,7 +815,7 @@ mod tests {
         assert_eq!(result, EvalValue::Boolean(false));
 
         let less_eq_token = Token {
-            lexeme: Lexeme::LessEq("<=".to_string()),
+            lexeme: Lexeme::LessEq,
             span: Span::new(0, 0, 1),
         };
         let result = eval
@@ -827,14 +848,12 @@ mod tests {
     #[test]
     fn test_eval_errors_display() {
         let error1 = EvalErrors::InvalidUnaryOp {
-            op: Lexeme::Bang('!'),
+            op: Lexeme::Bang,
             val: EvalValue::String("test".to_string()),
         };
         assert_eq!(format!("{error1}"), "invalid op ! for test");
 
-        let error2 = EvalErrors::InvalidBinaryOp {
-            op: Lexeme::Plus('+'),
-        };
+        let error2 = EvalErrors::InvalidBinaryOp { op: Lexeme::Plus };
         assert_eq!(format!("{error2}"), "invalid operation PLUS +");
 
         let error3 = EvalErrors::StringsOrNumbers;
@@ -848,7 +867,7 @@ mod tests {
     fn test_eval_unary_error_invalid_operator() {
         let mut eval = Eval::new("", false);
         let invalid_token = Token {
-            lexeme: Lexeme::Plus('+'),
+            lexeme: Lexeme::Plus,
             span: Span::new(0, 0, 1),
         };
 
@@ -868,7 +887,7 @@ mod tests {
     fn test_eval_unary_error_invalid_type() {
         let mut eval = Eval::new("", false);
         let minus_token = Token {
-            lexeme: Lexeme::Minus('-'),
+            lexeme: Lexeme::Minus,
             span: Span::new(0, 0, 1),
         };
 
@@ -888,7 +907,7 @@ mod tests {
     fn test_eval_unary_bang_invalid_type() {
         let mut eval = Eval::new("", false);
         let bang_token = Token {
-            lexeme: Lexeme::Bang('!'),
+            lexeme: Lexeme::Bang,
             span: Span::new(0, 0, 1),
         };
 
@@ -908,7 +927,7 @@ mod tests {
     fn test_eval_binary_error_invalid_operator() {
         let mut eval = Eval::new("", false);
         let invalid_token = Token {
-            lexeme: Lexeme::Bang('!'),
+            lexeme: Lexeme::Bang,
             span: Span::new(0, 0, 1),
         };
 
@@ -932,7 +951,7 @@ mod tests {
     fn test_eval_binary_plus_mixed_types_error() {
         let mut eval = Eval::new("", false);
         let plus_token = Token {
-            lexeme: Lexeme::Plus('+'),
+            lexeme: Lexeme::Plus,
             span: Span::new(0, 0, 1),
         };
 
@@ -956,7 +975,7 @@ mod tests {
     fn test_eval_binary_arithmetic_invalid_types() {
         let mut eval = Eval::new("", false);
         let minus_token = Token {
-            lexeme: Lexeme::Minus('-'),
+            lexeme: Lexeme::Minus,
             span: Span::new(0, 0, 1),
         };
 
@@ -980,7 +999,7 @@ mod tests {
     fn test_eval_binary_comparison_invalid_types() {
         let mut eval = Eval::new("", false);
         let greater_token = Token {
-            lexeme: Lexeme::Greater('>'),
+            lexeme: Lexeme::Greater,
             span: Span::new(0, 0, 1),
         };
 
@@ -1004,7 +1023,7 @@ mod tests {
     fn test_eval_binary_equality_different_types() {
         let mut eval = Eval::new("", false);
         let eq_token = Token {
-            lexeme: Lexeme::EqEq("==".to_string()),
+            lexeme: Lexeme::EqEq,
             span: Span::new(0, 0, 1),
         };
 
@@ -1026,7 +1045,7 @@ mod tests {
     fn test_eval_binary_division_by_zero() {
         let mut eval = Eval::new("", false);
         let slash_token = Token {
-            lexeme: Lexeme::Slash('/'),
+            lexeme: Lexeme::Slash,
             span: Span::new(0, 0, 1),
         };
 

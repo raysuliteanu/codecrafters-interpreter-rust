@@ -46,45 +46,45 @@ impl Display for Token {
             Lexeme::Identifier(value) => {
                 write!(f, "{lexeme} {value} null")
             }
-            Lexeme::LeftParen(v)
-            | Lexeme::RightParen(v)
-            | Lexeme::LeftBrace(v)
-            | Lexeme::RightBrace(v)
-            | Lexeme::Dot(v)
-            | Lexeme::Comma(v)
-            | Lexeme::Minus(v)
-            | Lexeme::Plus(v)
-            | Lexeme::SemiColon(v)
-            | Lexeme::Star(v)
-            | Lexeme::Eq(v)
-            | Lexeme::Bang(v)
-            | Lexeme::Less(v)
-            | Lexeme::Greater(v)
-            | Lexeme::Slash(v) => write!(f, "{lexeme} {v} null"),
-            Lexeme::EqEq(v)
-            | Lexeme::BangEq(v)
-            | Lexeme::LessEq(v)
-            | Lexeme::GreaterEq(v)
-            | Lexeme::True(v)
-            | Lexeme::False(v)
-            | Lexeme::Nil(v)
-            | Lexeme::And(v)
-            | Lexeme::Or(v)
-            | Lexeme::Class(v)
-            | Lexeme::For(v)
-            | Lexeme::Fun(v)
-            | Lexeme::If(v)
-            | Lexeme::Else(v)
-            | Lexeme::Return(v)
-            | Lexeme::Super(v)
-            | Lexeme::This(v)
-            | Lexeme::Var(v)
-            | Lexeme::While(v)
-            | Lexeme::Print(v) => {
-                let v = v.to_lowercase();
+            Lexeme::LeftParen
+            | Lexeme::RightParen
+            | Lexeme::LeftBrace
+            | Lexeme::RightBrace
+            | Lexeme::Dot
+            | Lexeme::Comma
+            | Lexeme::Minus
+            | Lexeme::Plus
+            | Lexeme::SemiColon
+            | Lexeme::Star
+            | Lexeme::Eq
+            | Lexeme::Bang
+            | Lexeme::Less
+            | Lexeme::Greater
+            | Lexeme::Slash => write!(f, "{lexeme} {} null", lexeme.lexeme_str()),
+            Lexeme::EqEq
+            | Lexeme::BangEq
+            | Lexeme::LessEq
+            | Lexeme::GreaterEq => write!(f, "{lexeme} {} null", lexeme.lexeme_str()),
+            Lexeme::True
+            | Lexeme::False
+            | Lexeme::Nil
+            | Lexeme::And
+            | Lexeme::Or
+            | Lexeme::Class
+            | Lexeme::For
+            | Lexeme::Fun
+            | Lexeme::If
+            | Lexeme::Else
+            | Lexeme::Return
+            | Lexeme::Super
+            | Lexeme::This
+            | Lexeme::Var
+            | Lexeme::While
+            | Lexeme::Print => {
+                let v = lexeme.lexeme_str();
                 write!(f, "{lexeme} {v} null")
             }
-            Lexeme::Eof(_) => {
+            Lexeme::Eof => {
                 write!(f, "{lexeme}  null")
             }
         }
@@ -94,43 +94,43 @@ impl Display for Token {
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Lexeme {
     // keywords
-    True(String),
-    False(String),
-    Nil(String),
-    And(String),
-    Or(String),
-    Class(String),
-    For(String),
-    Fun(String),
-    If(String),
-    Else(String),
-    Return(String),
-    Super(String),
-    This(String),
-    Var(String),
-    While(String),
-    Print(String),
+    True,
+    False,
+    Nil,
+    And,
+    Or,
+    Class,
+    For,
+    Fun,
+    If,
+    Else,
+    Return,
+    Super,
+    This,
+    Var,
+    While,
+    Print,
 
     // literals
-    LeftParen(char),
-    RightParen(char),
-    LeftBrace(char),
-    RightBrace(char),
-    Comma(char),
-    Dot(char),
-    Minus(char),
-    Plus(char),
-    SemiColon(char),
-    Star(char),
-    Eq(char),
-    EqEq(String),
-    Bang(char),
-    BangEq(String),
-    Less(char),
-    LessEq(String),
-    Greater(char),
-    GreaterEq(String),
-    Slash(char),
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    SemiColon,
+    Star,
+    Eq,
+    EqEq,
+    Bang,
+    BangEq,
+    Less,
+    LessEq,
+    Greater,
+    GreaterEq,
+    Slash,
 
     // value holders
     Number(String, f64),
@@ -138,51 +138,87 @@ pub enum Lexeme {
     String(String),
 
     // symbolic placeholder
-    Eof(String),
+    Eof,
+}
+
+impl Lexeme {
+    /// Returns the lexeme as a string (the actual source representation)
+    pub fn lexeme_str(&self) -> &'static str {
+        match self {
+            Lexeme::LeftParen => "(",
+            Lexeme::RightParen => ")",
+            Lexeme::LeftBrace => "{",
+            Lexeme::RightBrace => "}",
+            Lexeme::Comma => ",",
+            Lexeme::Dot => ".",
+            Lexeme::Minus => "-",
+            Lexeme::Plus => "+",
+            Lexeme::SemiColon => ";",
+            Lexeme::Star => "*",
+            Lexeme::Eq => "=",
+            Lexeme::EqEq => "==",
+            Lexeme::Bang => "!",
+            Lexeme::BangEq => "!=",
+            Lexeme::Less => "<",
+            Lexeme::LessEq => "<=",
+            Lexeme::Greater => ">",
+            Lexeme::GreaterEq => ">=",
+            Lexeme::Slash => "/",
+            Lexeme::True => "true",
+            Lexeme::False => "false",
+            Lexeme::Nil => "nil",
+            Lexeme::And => "and",
+            Lexeme::Or => "or",
+            Lexeme::Class => "class",
+            Lexeme::For => "for",
+            Lexeme::Fun => "fun",
+            Lexeme::If => "if",
+            Lexeme::Else => "else",
+            Lexeme::Return => "return",
+            Lexeme::Super => "super",
+            Lexeme::This => "this",
+            Lexeme::Var => "var",
+            Lexeme::While => "while",
+            Lexeme::Print => "print",
+            Lexeme::Eof => "eof",
+            // Variable lexemes don't have constant representations
+            Lexeme::Number(_, _) | Lexeme::Identifier(_) | Lexeme::String(_) => 
+                panic!("Variable lexemes don't have constant string representations"),
+        }
+    }
+
+    /// Returns the display name for the lexeme (uppercase token type)
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Lexeme::True => "TRUE",
+            Lexeme::False => "FALSE",
+            Lexeme::Nil => "NIL",
+            Lexeme::And => "AND",
+            Lexeme::Or => "OR",
+            Lexeme::Class => "CLASS",
+            Lexeme::For => "FOR",
+            Lexeme::Fun => "FUN",
+            Lexeme::If => "IF",
+            Lexeme::Else => "ELSE",
+            Lexeme::Return => "RETURN",
+            Lexeme::Super => "SUPER",
+            Lexeme::This => "THIS",
+            Lexeme::Var => "VAR",
+            Lexeme::While => "WHILE",
+            Lexeme::Print => "PRINT",
+            Lexeme::Eof => "EOF",
+            _ => self.lexeme_str(),
+        }
+    }
 }
 
 impl From<&Lexeme> for String {
     fn from(value: &Lexeme) -> Self {
         match value {
-            Lexeme::True(s)
-            | Lexeme::False(s)
-            | Lexeme::Nil(s)
-            | Lexeme::And(s)
-            | Lexeme::Or(s)
-            | Lexeme::Class(s)
-            | Lexeme::For(s)
-            | Lexeme::Fun(s)
-            | Lexeme::If(s)
-            | Lexeme::Else(s)
-            | Lexeme::Return(s)
-            | Lexeme::Super(s)
-            | Lexeme::This(s)
-            | Lexeme::Var(s)
-            | Lexeme::While(s)
-            | Lexeme::Print(s)
-            | Lexeme::Identifier(s)
-            | Lexeme::String(s)
-            | Lexeme::EqEq(s)
-            | Lexeme::BangEq(s)
-            | Lexeme::LessEq(s)
-            | Lexeme::GreaterEq(s)
-            | Lexeme::Eof(s) => String::from(s),
-            Lexeme::LeftParen(c)
-            | Lexeme::RightParen(c)
-            | Lexeme::LeftBrace(c)
-            | Lexeme::RightBrace(c)
-            | Lexeme::Comma(c)
-            | Lexeme::Dot(c)
-            | Lexeme::Minus(c)
-            | Lexeme::Plus(c)
-            | Lexeme::SemiColon(c)
-            | Lexeme::Star(c)
-            | Lexeme::Bang(c)
-            | Lexeme::Less(c)
-            | Lexeme::Greater(c)
-            | Lexeme::Slash(c)
-            | Lexeme::Eq(c) => c.to_string(),
+            Lexeme::Identifier(s) | Lexeme::String(s) => String::from(s),
             Lexeme::Number(s, _) => String::from(s),
+            // For all constant lexemes, use the lexeme_str() method
+            _ => value.lexeme_str().to_string(),
         }
     }
 }
@@ -190,42 +226,42 @@ impl From<&Lexeme> for String {
 impl From<&str> for Lexeme {
     fn from(value: &str) -> Self {
         match value {
-            "(" => Lexeme::LeftParen('('),
-            ")" => Lexeme::RightParen(')'),
-            "{" => Lexeme::LeftBrace('{'),
-            "}" => Lexeme::RightBrace('}'),
-            "," => Lexeme::Comma(','),
-            "." => Lexeme::Dot('.'),
-            ";" => Lexeme::SemiColon(';'),
-            "+" => Lexeme::Plus('+'),
-            "-" => Lexeme::Minus('-'),
-            "*" => Lexeme::Star('*'),
-            "/" => Lexeme::Slash('/'),
-            "=" => Lexeme::Eq('='),
-            "!" => Lexeme::Bang('!'),
-            "<" => Lexeme::Less('<'),
-            ">" => Lexeme::Greater('>'),
-            "==" => Lexeme::EqEq("==".to_string()),
-            "!=" => Lexeme::BangEq("!=".to_string()),
-            "<=" => Lexeme::LessEq("<=".to_string()),
-            ">=" => Lexeme::GreaterEq(">=".to_string()),
-            "print" => Lexeme::Print("PRINT".to_string()),
-            "true" => Lexeme::True("TRUE".to_string()),
-            "false" => Lexeme::False("FALSE".to_string()),
-            "nil" => Lexeme::Nil("NIL".to_string()),
-            "and" => Lexeme::And("AND".to_string()),
-            "or" => Lexeme::Or("OR".to_string()),
-            "fun" => Lexeme::Fun("FUN".to_string()),
-            "return" => Lexeme::Return("RETURN".to_string()),
-            "if" => Lexeme::If("IF".to_string()),
-            "else" => Lexeme::Else("ELSE".to_string()),
-            "for" => Lexeme::For("FOR".to_string()),
-            "while" => Lexeme::While("WHILE".to_string()),
-            "class" => Lexeme::Class("CLASS".to_string()),
-            "super" => Lexeme::Super("SUPER".to_string()),
-            "this" => Lexeme::This("THIS".to_string()),
-            "var" => Lexeme::Var("VAR".to_string()),
-            "eof" => Lexeme::Eof("EOF".to_string()),
+            "(" => Lexeme::LeftParen,
+            ")" => Lexeme::RightParen,
+            "{" => Lexeme::LeftBrace,
+            "}" => Lexeme::RightBrace,
+            "," => Lexeme::Comma,
+            "." => Lexeme::Dot,
+            ";" => Lexeme::SemiColon,
+            "+" => Lexeme::Plus,
+            "-" => Lexeme::Minus,
+            "*" => Lexeme::Star,
+            "/" => Lexeme::Slash,
+            "=" => Lexeme::Eq,
+            "!" => Lexeme::Bang,
+            "<" => Lexeme::Less,
+            ">" => Lexeme::Greater,
+            "==" => Lexeme::EqEq,
+            "!=" => Lexeme::BangEq,
+            "<=" => Lexeme::LessEq,
+            ">=" => Lexeme::GreaterEq,
+            "print" => Lexeme::Print,
+            "true" => Lexeme::True,
+            "false" => Lexeme::False,
+            "nil" => Lexeme::Nil,
+            "and" => Lexeme::And,
+            "or" => Lexeme::Or,
+            "fun" => Lexeme::Fun,
+            "return" => Lexeme::Return,
+            "if" => Lexeme::If,
+            "else" => Lexeme::Else,
+            "for" => Lexeme::For,
+            "while" => Lexeme::While,
+            "class" => Lexeme::Class,
+            "super" => Lexeme::Super,
+            "this" => Lexeme::This,
+            "var" => Lexeme::Var,
+            "eof" => Lexeme::Eof,
             _ => panic!("invalid token {value}"),
         }
     }
@@ -237,42 +273,27 @@ impl Display for Lexeme {
             Lexeme::Number(_, _) => write!(f, "NUMBER"),
             Lexeme::Identifier(_) => write!(f, "IDENTIFIER"),
             Lexeme::String(_) => write!(f, "STRING"),
-            Lexeme::LeftParen(_) => write!(f, "LEFT_PAREN"),
-            Lexeme::RightParen(_) => write!(f, "RIGHT_PAREN"),
-            Lexeme::LeftBrace(_) => write!(f, "LEFT_BRACE"),
-            Lexeme::RightBrace(_) => write!(f, "RIGHT_BRACE"),
-            Lexeme::Dot(_) => write!(f, "DOT"),
-            Lexeme::Comma(_) => write!(f, "COMMA"),
-            Lexeme::Minus(_) => write!(f, "MINUS"),
-            Lexeme::Plus(_) => write!(f, "PLUS"),
-            Lexeme::SemiColon(_) => write!(f, "SEMICOLON"),
-            Lexeme::Star(_) => write!(f, "STAR"),
-            Lexeme::Eq(_) => write!(f, "EQUAL"),
-            Lexeme::EqEq(_) => write!(f, "EQUAL_EQUAL"),
-            Lexeme::Bang(_) => write!(f, "BANG"),
-            Lexeme::BangEq(_) => write!(f, "BANG_EQUAL"),
-            Lexeme::Less(_) => write!(f, "LESS"),
-            Lexeme::LessEq(_) => write!(f, "LESS_EQUAL"),
-            Lexeme::Greater(_) => write!(f, "GREATER"),
-            Lexeme::GreaterEq(_) => write!(f, "GREATER_EQUAL"),
-            Lexeme::Slash(_) => write!(f, "SLASH"),
-            Lexeme::True(v)
-            | Lexeme::False(v)
-            | Lexeme::Nil(v)
-            | Lexeme::And(v)
-            | Lexeme::Or(v)
-            | Lexeme::Class(v)
-            | Lexeme::For(v)
-            | Lexeme::Fun(v)
-            | Lexeme::If(v)
-            | Lexeme::Else(v)
-            | Lexeme::Return(v)
-            | Lexeme::Super(v)
-            | Lexeme::This(v)
-            | Lexeme::Var(v)
-            | Lexeme::While(v)
-            | Lexeme::Print(v)
-            | Lexeme::Eof(v) => write!(f, "{v}"),
+            Lexeme::LeftParen => write!(f, "LEFT_PAREN"),
+            Lexeme::RightParen => write!(f, "RIGHT_PAREN"),
+            Lexeme::LeftBrace => write!(f, "LEFT_BRACE"),
+            Lexeme::RightBrace => write!(f, "RIGHT_BRACE"),
+            Lexeme::Dot => write!(f, "DOT"),
+            Lexeme::Comma => write!(f, "COMMA"),
+            Lexeme::Minus => write!(f, "MINUS"),
+            Lexeme::Plus => write!(f, "PLUS"),
+            Lexeme::SemiColon => write!(f, "SEMICOLON"),
+            Lexeme::Star => write!(f, "STAR"),
+            Lexeme::Eq => write!(f, "EQUAL"),
+            Lexeme::EqEq => write!(f, "EQUAL_EQUAL"),
+            Lexeme::Bang => write!(f, "BANG"),
+            Lexeme::BangEq => write!(f, "BANG_EQUAL"),
+            Lexeme::Less => write!(f, "LESS"),
+            Lexeme::LessEq => write!(f, "LESS_EQUAL"),
+            Lexeme::Greater => write!(f, "GREATER"),
+            Lexeme::GreaterEq => write!(f, "GREATER_EQUAL"),
+            Lexeme::Slash => write!(f, "SLASH"),
+            // For keywords and EOF, use the display_name method
+            _ => write!(f, "{}", self.display_name()),
         }
     }
 }
@@ -517,7 +538,7 @@ mod tests {
     #[test]
     fn test_token_new() {
         let span = Span::new(1, 0, 1);
-        let lexeme = Lexeme::LeftParen('(');
+        let lexeme = Lexeme::LeftParen;
         let token = Token::new(lexeme.clone(), span.clone());
 
         assert_eq!(token.lexeme, lexeme);
@@ -553,68 +574,68 @@ mod tests {
 
     #[test]
     fn test_token_display_single_char() {
-        let token = Token::new(Lexeme::LeftParen('('), Span::new(1, 0, 1));
+        let token = Token::new(Lexeme::LeftParen, Span::new(1, 0, 1));
         assert_eq!(format!("{token}"), "LEFT_PAREN ( null");
     }
 
     #[test]
     fn test_token_display_keyword() {
-        let token = Token::new(Lexeme::True("TRUE".to_string()), Span::new(1, 0, 4));
+        let token = Token::new(Lexeme::True, Span::new(1, 0, 4));
         assert_eq!(format!("{token}"), "TRUE true null");
     }
 
     #[test]
     fn test_token_display_eof() {
-        let token = Token::new(Lexeme::Eof("EOF".to_string()), Span::new(1, 0, 0));
+        let token = Token::new(Lexeme::Eof, Span::new(1, 0, 0));
         assert_eq!(format!("{token}"), "EOF  null");
     }
 
     #[test]
     fn test_lexeme_from_single_chars() {
-        assert_eq!(Lexeme::from("("), Lexeme::LeftParen('('));
-        assert_eq!(Lexeme::from(")"), Lexeme::RightParen(')'));
-        assert_eq!(Lexeme::from("{"), Lexeme::LeftBrace('{'));
-        assert_eq!(Lexeme::from("}"), Lexeme::RightBrace('}'));
-        assert_eq!(Lexeme::from(","), Lexeme::Comma(','));
-        assert_eq!(Lexeme::from("."), Lexeme::Dot('.'));
-        assert_eq!(Lexeme::from(";"), Lexeme::SemiColon(';'));
-        assert_eq!(Lexeme::from("+"), Lexeme::Plus('+'));
-        assert_eq!(Lexeme::from("-"), Lexeme::Minus('-'));
-        assert_eq!(Lexeme::from("*"), Lexeme::Star('*'));
-        assert_eq!(Lexeme::from("/"), Lexeme::Slash('/'));
-        assert_eq!(Lexeme::from("="), Lexeme::Eq('='));
-        assert_eq!(Lexeme::from("!"), Lexeme::Bang('!'));
-        assert_eq!(Lexeme::from("<"), Lexeme::Less('<'));
-        assert_eq!(Lexeme::from(">"), Lexeme::Greater('>'));
+        assert_eq!(Lexeme::from("("), Lexeme::LeftParen);
+        assert_eq!(Lexeme::from(")"), Lexeme::RightParen);
+        assert_eq!(Lexeme::from("{"), Lexeme::LeftBrace);
+        assert_eq!(Lexeme::from("}"), Lexeme::RightBrace);
+        assert_eq!(Lexeme::from(","), Lexeme::Comma);
+        assert_eq!(Lexeme::from("."), Lexeme::Dot);
+        assert_eq!(Lexeme::from(";"), Lexeme::SemiColon);
+        assert_eq!(Lexeme::from("+"), Lexeme::Plus);
+        assert_eq!(Lexeme::from("-"), Lexeme::Minus);
+        assert_eq!(Lexeme::from("*"), Lexeme::Star);
+        assert_eq!(Lexeme::from("/"), Lexeme::Slash);
+        assert_eq!(Lexeme::from("="), Lexeme::Eq);
+        assert_eq!(Lexeme::from("!"), Lexeme::Bang);
+        assert_eq!(Lexeme::from("<"), Lexeme::Less);
+        assert_eq!(Lexeme::from(">"), Lexeme::Greater);
     }
 
     #[test]
     fn test_lexeme_from_double_chars() {
-        assert_eq!(Lexeme::from("=="), Lexeme::EqEq("==".to_string()));
-        assert_eq!(Lexeme::from("!="), Lexeme::BangEq("!=".to_string()));
-        assert_eq!(Lexeme::from("<="), Lexeme::LessEq("<=".to_string()));
-        assert_eq!(Lexeme::from(">="), Lexeme::GreaterEq(">=".to_string()));
+        assert_eq!(Lexeme::from("=="), Lexeme::EqEq);
+        assert_eq!(Lexeme::from("!="), Lexeme::BangEq);
+        assert_eq!(Lexeme::from("<="), Lexeme::LessEq);
+        assert_eq!(Lexeme::from(">="), Lexeme::GreaterEq);
     }
 
     #[test]
     fn test_lexeme_from_keywords() {
-        assert_eq!(Lexeme::from("print"), Lexeme::Print("PRINT".to_string()));
-        assert_eq!(Lexeme::from("true"), Lexeme::True("TRUE".to_string()));
-        assert_eq!(Lexeme::from("false"), Lexeme::False("FALSE".to_string()));
-        assert_eq!(Lexeme::from("nil"), Lexeme::Nil("NIL".to_string()));
-        assert_eq!(Lexeme::from("and"), Lexeme::And("AND".to_string()));
-        assert_eq!(Lexeme::from("or"), Lexeme::Or("OR".to_string()));
-        assert_eq!(Lexeme::from("fun"), Lexeme::Fun("FUN".to_string()));
-        assert_eq!(Lexeme::from("return"), Lexeme::Return("RETURN".to_string()));
-        assert_eq!(Lexeme::from("if"), Lexeme::If("IF".to_string()));
-        assert_eq!(Lexeme::from("else"), Lexeme::Else("ELSE".to_string()));
-        assert_eq!(Lexeme::from("for"), Lexeme::For("FOR".to_string()));
-        assert_eq!(Lexeme::from("while"), Lexeme::While("WHILE".to_string()));
-        assert_eq!(Lexeme::from("class"), Lexeme::Class("CLASS".to_string()));
-        assert_eq!(Lexeme::from("super"), Lexeme::Super("SUPER".to_string()));
-        assert_eq!(Lexeme::from("this"), Lexeme::This("THIS".to_string()));
-        assert_eq!(Lexeme::from("var"), Lexeme::Var("VAR".to_string()));
-        assert_eq!(Lexeme::from("eof"), Lexeme::Eof("EOF".to_string()));
+        assert_eq!(Lexeme::from("print"), Lexeme::Print);
+        assert_eq!(Lexeme::from("true"), Lexeme::True);
+        assert_eq!(Lexeme::from("false"), Lexeme::False);
+        assert_eq!(Lexeme::from("nil"), Lexeme::Nil);
+        assert_eq!(Lexeme::from("and"), Lexeme::And);
+        assert_eq!(Lexeme::from("or"), Lexeme::Or);
+        assert_eq!(Lexeme::from("fun"), Lexeme::Fun);
+        assert_eq!(Lexeme::from("return"), Lexeme::Return);
+        assert_eq!(Lexeme::from("if"), Lexeme::If);
+        assert_eq!(Lexeme::from("else"), Lexeme::Else);
+        assert_eq!(Lexeme::from("for"), Lexeme::For);
+        assert_eq!(Lexeme::from("while"), Lexeme::While);
+        assert_eq!(Lexeme::from("class"), Lexeme::Class);
+        assert_eq!(Lexeme::from("super"), Lexeme::Super);
+        assert_eq!(Lexeme::from("this"), Lexeme::This);
+        assert_eq!(Lexeme::from("var"), Lexeme::Var);
+        assert_eq!(Lexeme::from("eof"), Lexeme::Eof);
     }
 
     #[test]
@@ -634,9 +655,9 @@ mod tests {
             "IDENTIFIER"
         );
         assert_eq!(format!("{}", Lexeme::String("hello".to_string())), "STRING");
-        assert_eq!(format!("{}", Lexeme::LeftParen('(')), "LEFT_PAREN");
-        assert_eq!(format!("{}", Lexeme::True("TRUE".to_string())), "TRUE");
-        assert_eq!(format!("{}", Lexeme::Eof("EOF".to_string())), "EOF");
+        assert_eq!(format!("{}", Lexeme::LeftParen), "LEFT_PAREN");
+        assert_eq!(format!("{}", Lexeme::True), "TRUE");
+        assert_eq!(format!("{}", Lexeme::Eof), "EOF");
     }
 
     #[test]
@@ -651,7 +672,7 @@ mod tests {
         let scanner = Scanner::new("", true);
         let tokens = scanner.scan().unwrap();
         assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[0].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -660,17 +681,17 @@ mod tests {
         let tokens = scanner.scan().unwrap();
 
         let expected_lexemes = vec![
-            Lexeme::LeftParen('('),
-            Lexeme::RightParen(')'),
-            Lexeme::LeftBrace('{'),
-            Lexeme::RightBrace('}'),
-            Lexeme::Comma(','),
-            Lexeme::Dot('.'),
-            Lexeme::Plus('+'),
-            Lexeme::Minus('-'),
-            Lexeme::SemiColon(';'),
-            Lexeme::Star('*'),
-            Lexeme::Eof("EOF".to_string()),
+            Lexeme::LeftParen,
+            Lexeme::RightParen,
+            Lexeme::LeftBrace,
+            Lexeme::RightBrace,
+            Lexeme::Comma,
+            Lexeme::Dot,
+            Lexeme::Plus,
+            Lexeme::Minus,
+            Lexeme::SemiColon,
+            Lexeme::Star,
+            Lexeme::Eof,
         ];
 
         assert_eq!(tokens.len(), expected_lexemes.len());
@@ -685,14 +706,14 @@ mod tests {
         let tokens = scanner.scan().unwrap();
 
         let expected_lexemes = vec![
-            Lexeme::EqEq("==".to_string()),
-            Lexeme::Bang('!'),
-            Lexeme::BangEq("!=".to_string()),
-            Lexeme::Less('<'),
-            Lexeme::LessEq("<=".to_string()),
-            Lexeme::Greater('>'),
-            Lexeme::GreaterEq(">=".to_string()),
-            Lexeme::Eof("EOF".to_string()),
+            Lexeme::EqEq,
+            Lexeme::Bang,
+            Lexeme::BangEq,
+            Lexeme::Less,
+            Lexeme::LessEq,
+            Lexeme::Greater,
+            Lexeme::GreaterEq,
+            Lexeme::Eof,
         ];
 
         assert_eq!(tokens.len(), expected_lexemes.len());
@@ -708,7 +729,7 @@ mod tests {
 
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].lexeme, Lexeme::String("hello world".to_string()));
-        assert_eq!(tokens[1].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[1].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -730,7 +751,7 @@ mod tests {
         assert_eq!(tokens[0].lexeme, Lexeme::Number("123".to_string(), 123.0));
         assert_eq!(tokens[1].lexeme, Lexeme::Number("1.23".to_string(), 1.23));
         assert_eq!(tokens[2].lexeme, Lexeme::Number("42.0".to_string(), 42.0));
-        assert_eq!(tokens[3].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[3].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -748,7 +769,7 @@ mod tests {
             tokens[2].lexeme,
             Lexeme::Identifier("camelCase".to_string())
         );
-        assert_eq!(tokens[3].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[3].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -757,12 +778,12 @@ mod tests {
         let tokens = scanner.scan().unwrap();
 
         assert_eq!(tokens.len(), 6);
-        assert_eq!(tokens[0].lexeme, Lexeme::True("TRUE".to_string()));
-        assert_eq!(tokens[1].lexeme, Lexeme::False("FALSE".to_string()));
-        assert_eq!(tokens[2].lexeme, Lexeme::Nil("NIL".to_string()));
-        assert_eq!(tokens[3].lexeme, Lexeme::And("AND".to_string()));
-        assert_eq!(tokens[4].lexeme, Lexeme::Or("OR".to_string()));
-        assert_eq!(tokens[5].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[0].lexeme, Lexeme::True);
+        assert_eq!(tokens[1].lexeme, Lexeme::False);
+        assert_eq!(tokens[2].lexeme, Lexeme::Nil);
+        assert_eq!(tokens[3].lexeme, Lexeme::And);
+        assert_eq!(tokens[4].lexeme, Lexeme::Or);
+        assert_eq!(tokens[5].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -772,7 +793,7 @@ mod tests {
 
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].lexeme, Lexeme::Number("42".to_string(), 42.0));
-        assert_eq!(tokens[1].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[1].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -782,7 +803,7 @@ mod tests {
 
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].lexeme, Lexeme::Number("42".to_string(), 42.0));
-        assert_eq!(tokens[1].lexeme, Lexeme::Eof("EOF".to_string()));
+        assert_eq!(tokens[1].lexeme, Lexeme::Eof);
     }
 
     #[test]
@@ -811,27 +832,27 @@ mod tests {
 
         // Should contain fun, identifier, (, identifier, ), {, if, (, etc.
         assert!(tokens.len() > 20);
-        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Fun(_))));
-        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::If(_))));
-        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Return(_))));
-        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Print(_))));
+        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Fun)));
+        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::If)));
+        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Return)));
+        assert!(tokens.iter().any(|t| matches!(t.lexeme, Lexeme::Print)));
     }
 
     #[test]
     fn test_lexeme_from_helper() {
-        assert_eq!(lexeme_from("("), Lexeme::LeftParen('('));
-        assert_eq!(lexeme_from("true"), Lexeme::True("TRUE".to_string()));
+        assert_eq!(lexeme_from("("), Lexeme::LeftParen);
+        assert_eq!(lexeme_from("true"), Lexeme::True);
     }
 
     #[test]
     fn test_keyword_token_helper() {
         assert_eq!(
             keyword_token("true"),
-            Some(Lexeme::True("TRUE".to_string()))
+            Some(Lexeme::True)
         );
         assert_eq!(
             keyword_token("false"),
-            Some(Lexeme::False("FALSE".to_string()))
+            Some(Lexeme::False)
         );
         assert_eq!(keyword_token("identifier"), None);
     }

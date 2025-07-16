@@ -142,9 +142,9 @@ impl<'parser> Parser<'parser> {
     fn declaration(&self, tokens: &mut PeekableTokenIter) -> ParseResult<Ast> {
         if let Some(token) = tokens.peek() {
             match token.lexeme {
-                Lexeme::Class(_) => self.class_decl(tokens),
-                Lexeme::Fun(_) => self.fun_decl(tokens),
-                Lexeme::Var(_) => self.var_decl(tokens),
+                Lexeme::Class => self.class_decl(tokens),
+                Lexeme::Fun => self.fun_decl(tokens),
+                Lexeme::Var => self.var_decl(tokens),
                 _ => {
                     let ast = if self.expression_mode {
                         Ast::Expression(self.expression(tokens)?)
@@ -207,12 +207,12 @@ impl<'parser> Parser<'parser> {
         let r = match tokens.peek() {
             Some(token) => match token.lexeme {
                 // left brace token indicates block start
-                crate::token::Lexeme::LeftBrace(_) => self.parse_block(tokens),
-                crate::token::Lexeme::For(_) => self.for_stmt(tokens),
-                crate::token::Lexeme::If(_) => self.if_stmt(tokens),
-                crate::token::Lexeme::Print(_) => self.print_stmt(tokens),
-                crate::token::Lexeme::Return(_) => self.return_stmt(tokens),
-                crate::token::Lexeme::While(_) => self.while_stmt(tokens),
+                crate::token::Lexeme::LeftBrace => self.parse_block(tokens),
+                crate::token::Lexeme::For => self.for_stmt(tokens),
+                crate::token::Lexeme::If => self.if_stmt(tokens),
+                crate::token::Lexeme::Print => self.print_stmt(tokens),
+                crate::token::Lexeme::Return => self.return_stmt(tokens),
+                crate::token::Lexeme::While => self.while_stmt(tokens),
                 _ => {
                     let ast = self.expression_statement(tokens)?;
                     Ok(ast)
@@ -311,12 +311,12 @@ impl<'parser> Parser<'parser> {
         } else if tokens.peek().is_some_and(|t| {
             !matches!(
                 t.lexeme,
-                Lexeme::LeftBrace(_)
-                    | Lexeme::For(_)
-                    | Lexeme::While(_)
-                    | Lexeme::If(_)
-                    | Lexeme::Print(_)
-                    | Lexeme::Return(_)
+                Lexeme::LeftBrace
+                    | Lexeme::For
+                    | Lexeme::While
+                    | Lexeme::If
+                    | Lexeme::Print
+                    | Lexeme::Return
             )
         }) {
             let ast = self.expression(tokens)?;
@@ -415,7 +415,7 @@ impl<'parser> Parser<'parser> {
         let mut left = self.comparison(tokens)?;
 
         while let Some(t) =
-            tokens.next_if(|t| matches!(t.lexeme, Lexeme::BangEq(_) | Lexeme::EqEq(_)))
+            tokens.next_if(|t| matches!(t.lexeme, Lexeme::BangEq | Lexeme::EqEq))
         {
             let right = self.comparison(tokens)?;
             let op = t.clone();
@@ -432,7 +432,7 @@ impl<'parser> Parser<'parser> {
         while let Some(t) = tokens.next_if(|t| {
             matches!(
                 t.lexeme,
-                Lexeme::Greater(_) | Lexeme::GreaterEq(_) | Lexeme::Less(_) | Lexeme::LessEq(_)
+                Lexeme::Greater | Lexeme::GreaterEq | Lexeme::Less | Lexeme::LessEq
             )
         }) {
             let right = self.term(tokens)?;
@@ -448,7 +448,7 @@ impl<'parser> Parser<'parser> {
         let mut left = self.factor(tokens)?;
 
         while let Some(t) =
-            tokens.next_if(|t| matches!(t.lexeme, Lexeme::Plus(_) | Lexeme::Minus(_)))
+            tokens.next_if(|t| matches!(t.lexeme, Lexeme::Plus | Lexeme::Minus))
         {
             let right = self.factor(tokens)?;
             let op = t.clone();
@@ -463,7 +463,7 @@ impl<'parser> Parser<'parser> {
         let mut left = self.unary(tokens)?;
 
         while let Some(t) =
-            tokens.next_if(|t| matches!(t.lexeme, Lexeme::Star(_) | Lexeme::Slash(_)))
+            tokens.next_if(|t| matches!(t.lexeme, Lexeme::Star | Lexeme::Slash))
         {
             let right = self.unary(tokens)?;
             let op = t.clone();
@@ -476,7 +476,7 @@ impl<'parser> Parser<'parser> {
     fn unary(&self, tokens: &mut PeekableTokenIter) -> ParseResult<AstExpr> {
         trace!("unary: {:?}", tokens.peek());
         if let Some(op_token) =
-            tokens.next_if(|t| matches!(t.lexeme, Lexeme::Minus(_) | Lexeme::Bang(_)))
+            tokens.next_if(|t| matches!(t.lexeme, Lexeme::Minus | Lexeme::Bang))
         {
             let right = self.unary(tokens)?;
             Ok(ast_unary!(op_token, right))
@@ -490,7 +490,7 @@ impl<'parser> Parser<'parser> {
         if let Some(token) = tokens.next_if(|t| {
             matches!(
                 t.lexeme,
-                Lexeme::True(_) | Lexeme::False(_) | Lexeme::Nil(_)
+                Lexeme::True | Lexeme::False | Lexeme::Nil
             )
         }) {
             Ok(ast_terminal!(token))
