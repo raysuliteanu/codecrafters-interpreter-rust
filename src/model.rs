@@ -20,7 +20,6 @@ pub enum AstStmt {
     If(Box<AstExpr>, Box<Ast>, Option<Box<Ast>>),
     // cond, body
     While(Box<AstExpr>, Box<Ast>),
-    For,
     Return(Option<Box<AstExpr>>),
     Print(AstExpr),
     Expression(AstExpr),
@@ -70,9 +69,9 @@ impl Display for Ast {
             Ast::Block(block) => {
                 writeln!(f, "{{")?;
                 for s in block {
-                    write!(f, "{s}")?;
+                    writeln!(f, "{s}")?;
                 }
-                writeln!(f, "}}")
+                write!(f, "}}")
             }
             Ast::Statement(s) => write!(f, "{s}"),
             Ast::Expression(e) => write!(f, "{e}"),
@@ -159,7 +158,6 @@ impl Display for AstStmt {
             AstStmt::While(cond, body) => {
                 write!(f, "while {cond} {body}")
             }
-            AstStmt::For => todo!(),
             AstStmt::Return(ast) => {
                 write!(f, "return")?;
                 if let Some(ast) = ast {

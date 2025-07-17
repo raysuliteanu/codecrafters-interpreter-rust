@@ -177,7 +177,6 @@ impl<'eval> Eval<'_> {
         match stmt {
             AstStmt::Expression(expr) => self.eval_expr(expr),
             AstStmt::Print(ast) => self.eval_print_stmt(ast),
-            AstStmt::For => todo!("for stmts"),
             AstStmt::If(cond, then_block, else_block) => {
                 self.eval_if_stmt(cond, then_block, else_block)
             }
@@ -1320,5 +1319,32 @@ mod tests {
         let mut eval = Eval::new("var x = 5; true and x", true);
         let result = eval.evaluate().unwrap();
         assert_eq!(result, EvalValue::Number(5.0));
+    }
+
+    #[test]
+    fn test_print_ast_simple() {
+        let source = "var x = 42; print x;";
+        let parser = Parser::new(source, false, false);
+        let ast = parser.parse().unwrap();
+
+        // This would print to stdout, so we just verify it doesn't panic
+        print_ast(&ast);
+    }
+
+    #[test]
+    fn test_print_ast_complex() {
+        let source = r#"
+        var a = 10;
+        if (a > 5) {
+            print "large";
+        } else {
+            print "small";
+        }
+        "#;
+        let parser = Parser::new(source, false, false);
+        let ast = parser.parse().unwrap();
+
+        // This would print to stdout, so we just verify it doesn't panic
+        print_ast(&ast);
     }
 }

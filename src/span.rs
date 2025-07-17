@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Span {
     offset: usize,
@@ -33,5 +35,11 @@ impl From<(usize, usize, usize)> for Span {
             offset: value.1,
             len: value.2,
         }
+    }
+}
+
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "line: {}, ({}, {})", self.line, self.offset, self.len)
     }
 }

@@ -24,10 +24,24 @@ struct Lox {
 
 #[derive(Subcommand)]
 enum LoxCommands {
-    Tokenize { filename: String },
-    Parse { filename: String },
-    Evaluate { filename: String },
-    Run { filename: Option<String> },
+    Tokenize {
+        filename: String,
+    },
+    Parse {
+        filename: String,
+        #[arg(short, long)]
+        no_expression_mode: bool,
+        #[arg(short, long)]
+        pretty_print: bool,
+    },
+    Evaluate {
+        filename: String,
+        #[arg(short, long)]
+        no_expression_mode: bool,
+    },
+    Run {
+        filename: Option<String>,
+    },
 }
 
 fn main() -> Result<ExitCode> {
@@ -43,16 +57,26 @@ fn main() -> Result<ExitCode> {
                 rc = e;
             }
         }
-        LoxCommands::Parse { filename } => {
+        LoxCommands::Parse {
+            filename,
+            no_expression_mode,
+            pretty_print,
+        } => {
             let source = get_source(filename)?;
-            if let Err(_e) = parser::Parser::new(&source, true, true).parse() {
+            let parser = parser::ParserBuilder::new(&source)
+                .expression_mode(!no_expression_mode)
+                .pretty_print(pretty_print)
+                .build();
+            if let Err(_e) = parser.parse() {
                 rc = 65;
             }
         }
-
-        LoxCommands::Evaluate { filename } => {
+        LoxCommands::Evaluate {
+            filename,
+            no_expression_mode,
+        } => {
             let source = get_source(filename)?;
-            match eval::Eval::new(&source, true).evaluate() {
+            match eval::Eval::new(&source, !no_expression_mode).evaluate() {
                 Ok(r) => println!("{r}"),
                 Err(e) => {
                     eprintln!("{e}");
