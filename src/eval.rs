@@ -14,6 +14,7 @@ pub type Callable = fn(&[EvalValue]) -> EvalResult<EvalValue>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum EvalValue {
+    FunDecl(LoxFunction),
     Number(f64),
     String(String),
     Boolean(bool),
@@ -27,6 +28,7 @@ impl Display for EvalValue {
             EvalValue::String(s) => write!(f, "{s}"),
             EvalValue::Boolean(b) => write!(f, "{b}"),
             EvalValue::Nil => write!(f, "nil"),
+            EvalValue::FunDecl(func) => write!(f, "{func}"),
         }
     }
 }
@@ -36,7 +38,7 @@ pub enum EvalErrors {
     #[error("invalid op {} for {}\n[line {line}]", <&Lexeme as Into<String>>::into(op), val)]
     InvalidUnaryOp {
         op: Lexeme,
-        val: EvalValue,
+        val: Box<EvalValue>,
         line: usize,
     },
     #[error("invalid operation {op} {}\n[line {line}]", <&Lexeme as Into<String>>::into(op))]
@@ -45,13 +47,15 @@ pub enum EvalErrors {
     StringsOrNumbers(usize),
     #[error("Undefined variable '{0}'.\n[line {1}]")]
     UndefinedVar(String, usize),
+    // #[error("bad function call")]
+    // FunctionCall,
 }
 
 macro_rules! invalid_unary_op {
     ($token: expr, $val: expr) => {
         EvalErrors::InvalidUnaryOp {
             op: $token.lexeme.clone(),
-            val: $val,
+            val: Box::new($val),
             line: $token.span.line(),
         }
     };
@@ -68,10 +72,44 @@ macro_rules! invalid_binary_op {
 
 pub type EvalResult<T> = Result<T, EvalErrors>;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoxFunction {
+    name: String,
+    params: Option<Vec<String>>,
+    fn_type: LoxFunctionType,
+}
+
+impl LoxFunction {
+    fn arity(&self) -> usize {
+        self.params.as_ref().map_or(0, |f| f.len())
+    }
+}
+
+impl Display for LoxFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<fn {}>", self.name)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum LoxFunctionType {
+    System(Callable),
+    UserDefined(Ast),
+}
+
+impl Clone for LoxFunctionType {
+    fn clone(&self) -> Self {
+        match self {
+            LoxFunctionType::System(callable) => LoxFunctionType::System(*callable),
+            LoxFunctionType::UserDefined(ast) => LoxFunctionType::UserDefined(ast.clone()),
+        }
+    }
+}
+
 #[derive(Default)]
 struct EvalEnv {
     vars: HashMap<String, EvalValue>,
-    fns: HashMap<String, Callable>,
+    fns: HashMap<String, EvalValue>,
 }
 
 impl EvalEnv {
@@ -96,7 +134,11 @@ impl EvalEnv {
         self.vars.get_mut(id)
     }
 
-    fn lookup_fn(&self, id: String) -> Option<&Callable> {
+    fn add_fn(&mut self, func: LoxFunction) -> Option<EvalValue> {
+        self.fns.insert(func.name.clone(), EvalValue::FunDecl(func))
+    }
+
+    fn lookup_lox_fn(&self, id: String) -> Option<&EvalValue> {
         self.fns.get(&id)
     }
 }
@@ -110,17 +152,29 @@ struct EvalState {
 impl EvalState {
     fn new() -> Self {
         let mut global_env = EvalEnv::new();
-        global_env.fns.insert("clock".to_string(), func::clock);
+        global_env.add_fn(LoxFunction {
+            name: "clock".to_string(),
+            params: None,
+            fn_type: LoxFunctionType::System(func::clock),
+        });
 
         let mut env = Stack::new();
         env.push_front(global_env);
+
         EvalState { env }
     }
 
-    fn lookup_fn(&mut self, id: &str) -> Option<&Callable> {
+    fn add_lox_fn(&mut self, func: LoxFunction) -> Option<EvalValue> {
+        self.env
+            .front_mut()
+            .expect("always at least a global env")
+            .add_fn(func)
+    }
+
+    fn lookup_lox_fn(&self, id: &str) -> Option<&EvalValue> {
         for env in &self.env {
             if env.fns.contains_key(id) {
-                return env.lookup_fn(id.to_string());
+                return env.lookup_lox_fn(id.to_string());
             }
         }
 
@@ -215,11 +269,7 @@ impl<'eval> Eval<'_> {
         trace!("eval_ast");
         match ast {
             Ast::Class => todo!("class decl"),
-            Ast::Function {
-                name: _,
-                params: _,
-                body: _,
-            } => todo!("eval function decl"),
+            Ast::Function { name, params, body } => self.eval_fun_decl(name, params, body),
             Ast::Variable { name, initializer } => self.eval_var_decl(name, initializer),
             Ast::Statement(stmt) => self.eval_stmt(stmt),
             Ast::Block(block) => self.eval_block(block),
@@ -395,7 +445,13 @@ impl<'eval> Eval<'_> {
     }
 
     fn eval_identifier(&self, id: &str) -> Option<&EvalValue> {
-        self.state.var_value(id)
+        if let Some(val) = self.state.var_value(id) {
+            Some(val)
+        } else if let Some(func) = self.state.lookup_lox_fn(id) {
+            Some(func)
+        } else {
+            None
+        }
     }
 
     // some_var = expr
@@ -527,18 +583,65 @@ impl<'eval> Eval<'_> {
     }
 
     fn eval_call(&mut self, func: &str, args: &[AstExpr], site: &Span) -> EvalResult<EvalValue> {
+        let lox_func = match self.state.lookup_lox_fn(func) {
+            Some(value) => match value {
+                EvalValue::FunDecl(lox_function) => lox_function.clone(),
+                _ => todo!(),
+            },
+            None => todo!("no such function at {site}"),
+        };
+
+        let val = if lox_func.arity() == args.len() {
+            self.do_fn_call(&lox_func, args)?
+        } else {
+            todo!("arity mismatch");
+        };
+
+        Ok(val)
+    }
+
+    fn do_fn_call(&mut self, lox_func: &LoxFunction, args: &[AstExpr]) -> EvalResult<EvalValue> {
         let mut vals = Vec::with_capacity(args.len());
         for arg in args {
             let val = self.eval_expr(arg)?;
             vals.push(val.clone());
         }
 
-        let fun = self.state.lookup_fn(func);
-        if let Some(f) = fun {
-            f(&vals)
-        } else {
-            todo!("no such fn invoked at {site}")
+        match &lox_func.fn_type {
+            LoxFunctionType::System(system) => system(&vals),
+            LoxFunctionType::UserDefined(body) => {
+                self.state.push();
+
+                lox_func
+                    .params
+                    .iter()
+                    .flatten()
+                    .zip(vals)
+                    .for_each(|(p, i)| {
+                        self.state.add_var(p.to_string(), Some(i));
+                    });
+
+                let result = self.eval_ast(body);
+
+                self.state.pop();
+
+                result
+            }
         }
+    }
+
+    fn eval_fun_decl(
+        &mut self,
+        name: &str,
+        params: &[String],
+        body: &Ast,
+    ) -> EvalResult<EvalValue> {
+        self.state.add_lox_fn(LoxFunction {
+            name: name.to_string(),
+            params: Some(params.to_vec()),
+            fn_type: LoxFunctionType::UserDefined((*body).clone()),
+        });
+        Ok(EvalValue::Nil)
     }
 }
 
@@ -885,7 +988,7 @@ mod tests {
     fn test_eval_errors_display() {
         let error1 = EvalErrors::InvalidUnaryOp {
             op: Lexeme::Bang,
-            val: EvalValue::String("test".to_string()),
+            val: Box::new(EvalValue::String("test".to_string())),
             line: 1,
         };
         assert_eq!(format!("{error1}"), "invalid op ! for test\n[line 1]");

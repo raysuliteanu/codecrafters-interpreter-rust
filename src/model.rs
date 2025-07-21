@@ -283,8 +283,7 @@ impl Display for Lexeme {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Ast {
     Class,
     Function {
@@ -301,7 +300,7 @@ pub enum Ast {
     Expression(AstExpr),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum AstStmt {
     // condition, then, else
     If {
@@ -316,7 +315,7 @@ pub enum AstStmt {
     Expression(AstExpr),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum AstExpr {
     Call {
         func: String,
