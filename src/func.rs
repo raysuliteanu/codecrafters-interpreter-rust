@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::eval::{EvalErrors, EvalResult, EvalValue};
+use crate::eval::{EvalResult, EvalValue};
 
 fn check_arity(expected: usize, args: &[EvalValue]) {
     assert_eq!(expected, args.len())

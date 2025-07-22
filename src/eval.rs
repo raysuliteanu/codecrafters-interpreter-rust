@@ -47,6 +47,12 @@ pub enum EvalErrors {
     StringsOrNumbers(usize),
     #[error("Undefined variable '{0}'.\n[line {1}]")]
     UndefinedVar(String, usize),
+    #[error("Incorrect number of arguments. Expected {expected} got {actual}.\n[line {line}]")]
+    ArityMismatch {
+        expected: usize,
+        actual: usize,
+        line: usize,
+    },
     // #[error("bad function call")]
     // FunctionCall,
 }
@@ -594,7 +600,11 @@ impl<'eval> Eval<'_> {
         let val = if lox_func.arity() == args.len() {
             self.do_fn_call(&lox_func, args)?
         } else {
-            todo!("arity mismatch");
+            return Err(EvalErrors::ArityMismatch {
+                expected: lox_func.arity(),
+                actual: args.len(),
+                line: site.line(),
+            });
         };
 
         Ok(val)

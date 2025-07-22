@@ -13,7 +13,7 @@ const MAX_FUNC_ARGS: u8 = u8::MAX;
 
 #[derive(Error, Debug, Clone)]
 pub enum ParseError {
-    #[error("missing token '{}' got '{}'", expected.lexeme_str(), actual.lexeme_str())]
+    #[error("missing token '{}' got '{}'\n[line {line}]", expected.lexeme_str(), actual.lexeme_str())]
     MissingToken {
         expected: Lexeme,
         actual: Lexeme,
@@ -239,43 +239,19 @@ impl<'parser> Parser<'parser> {
     // parameters → IDENTIFIER ( "," IDENTIFIER )* ;
     fn fun_decl(&self, tokens: &mut PeekableTokenIter) -> ParseResult<Ast> {
         trace!("fun_decl");
+
         // consume 'fun' token
         let fun_token = tokens.next().unwrap();
         assert_eq!(fun_token.lexeme, Lexeme::Fun);
 
-        let name =
-            if let Some(id) = tokens.next_if(|t| matches!(t.lexeme, Lexeme::Identifier { .. })) {
-                match &id.lexeme {
-                    Lexeme::Identifier(i) => i.clone(),
-                    _ => panic!("matched {id} but next_if() said it was an Lexeme::Identifier"),
-                }
-            } else {
-                todo!("expected identifier");
-            };
+        let name = self.parse_fun_name(tokens)?;
 
-        let mut params = vec![];
-        if tokens.next_if(|t| t.lexeme == Lexeme::LeftParen).is_some() {
-            while tokens
-                .peek()
-                .is_some_and(|f| f.lexeme != Lexeme::RightParen)
-            {
-                let token = tokens
-                    .next()
-                    .expect("peeked already so there has to be a token");
-                match &token.lexeme {
-                    Lexeme::Identifier(i) => {
-                        params.push(i.clone());
-                        tokens.next_if(|t| t.lexeme == Lexeme::Comma);
-                    }
-                    _ => todo!("invalid token {token}"),
-                }
-            }
-
-            // consume ')' token
-            let rparen = tokens.next().unwrap();
-            assert_eq!(rparen.lexeme, Lexeme::RightParen);
+        let params = if tokens.next_if(|t| t.lexeme == Lexeme::LeftParen).is_some() {
+            self.parse_fun_params(tokens)?
+        } else if let Some(token) = tokens.peek() {
+            return Err(ast_expected_token!(token token, Lexeme::LeftParen));
         } else {
-            todo!("missing open paren for fun decl")
+            return Err(ParseError::UnexpectedEof);
         };
 
         let body = self.parse_block(tokens)?;
@@ -285,6 +261,55 @@ impl<'parser> Parser<'parser> {
             params,
             body: Box::new(body),
         })
+    }
+
+    fn parse_fun_name(&self, tokens: &mut PeekableTokenIter) -> ParseResult<String> {
+        if let Some(id) = tokens.next_if(|t| matches!(t.lexeme, Lexeme::Identifier { .. })) {
+            match &id.lexeme {
+                Lexeme::Identifier(i) => Ok(i.clone()),
+                // TODO: how can we do this better?
+                _ => panic!("matched {id} but next_if() said it was an Lexeme::Identifier"),
+            }
+        } else if let Some(token) = tokens.peek() {
+            Err(ast_expected_token!(token token, Lexeme::Identifier("id".to_owned())))
+        } else {
+            Err(ParseError::UnexpectedEof)
+        }
+    }
+
+    // parameters → IDENTIFIER ( "," IDENTIFIER )* ;
+    fn parse_fun_params(&self, tokens: &mut PeekableTokenIter) -> ParseResult<Vec<String>> {
+        let mut params = vec![];
+
+        while tokens
+            .peek()
+            .is_some_and(|f| f.lexeme != Lexeme::RightParen)
+        {
+            let next_token = tokens.next().expect("peeked already");
+            if let Lexeme::Identifier(i) = &next_token.lexeme {
+                trace!("adding param {i}");
+                params.push(i.clone());
+
+                match tokens.peek() {
+                    // identifier identifier
+                    Some(t) if matches!(t.lexeme, Lexeme::Identifier { .. }) => {
+                        return Err(ast_expected_token!(token t, Lexeme::Comma));
+                    }
+                    // identifier ','
+                    Some(t) if matches!(t.lexeme, Lexeme::Comma) => {
+                        tokens.next();
+                        continue;
+                    }
+                    Some(_) | None => continue,
+                }
+            }
+        }
+
+        // consume ')' token
+        let rparen = tokens.next().expect("loop already verified closing paren");
+        assert_eq!(rparen.lexeme, Lexeme::RightParen);
+
+        Ok(params)
     }
 
     // varDecl → "var" IDENTIFIER ( "=" expression )? ";" ;
@@ -346,9 +371,12 @@ impl<'parser> Parser<'parser> {
     }
 
     fn parse_block(&self, tokens: &mut PeekableTokenIter) -> ParseResult<Ast> {
-        let left_brace_token = tokens.next().unwrap();
-        assert_eq!(left_brace_token.lexeme, Lexeme::LeftBrace);
         trace!("block start");
+
+        let expect_left_brace = tokens.next().unwrap();
+        if expect_left_brace.lexeme != Lexeme::LeftBrace {
+            return Err(ast_expected_token!(token expect_left_brace, Lexeme::LeftBrace));
+        }
 
         let mut stmts = vec![];
         while tokens

@@ -127,7 +127,7 @@ pub enum Lexeme {
 
 impl Lexeme {
     /// Returns the lexeme as a string (the actual source representation)
-    pub fn lexeme_str(&self) -> &'static str {
+    pub fn lexeme_str(&self) -> &str {
         match self {
             Lexeme::LeftParen => "(",
             Lexeme::RightParen => ")",
@@ -166,14 +166,12 @@ impl Lexeme {
             Lexeme::Print => "print",
             Lexeme::Eof => "eof",
             // Variable lexemes don't have constant representations
-            Lexeme::Number(_, _) | Lexeme::Identifier(_) | Lexeme::String(_) => {
-                panic!("{self} doesn't have a constant repr")
-            }
+            Lexeme::Number(s, _) | Lexeme::Identifier(s) | Lexeme::String(s) => s.as_str(),
         }
     }
 
     /// Returns the display name for the lexeme (uppercase token type)
-    pub fn display_name(&self) -> &'static str {
+    pub fn display_name(&self) -> &str {
         match self {
             Lexeme::True => "TRUE",
             Lexeme::False => "FALSE",
