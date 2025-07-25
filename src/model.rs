@@ -283,6 +283,7 @@ impl Display for Lexeme {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Ast {
+    #[allow(dead_code)]
     Class,
     Function {
         name: String,

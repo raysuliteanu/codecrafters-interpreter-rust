@@ -14,6 +14,7 @@ pub type Callable = fn(&[EvalValue]) -> EvalResult<EvalValue>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum EvalValue {
+    Return(Box<EvalValue>),
     FunDecl(LoxFunction),
     Number(f64),
     String(String),
@@ -29,6 +30,7 @@ impl Display for EvalValue {
             EvalValue::Boolean(b) => write!(f, "{b}"),
             EvalValue::Nil => write!(f, "nil"),
             EvalValue::FunDecl(func) => write!(f, "{func}"),
+            EvalValue::Return(value) => write!(f, "(return) {value}"),
         }
     }
 }
@@ -114,8 +116,7 @@ impl Clone for LoxFunctionType {
 
 #[derive(Default)]
 struct EvalEnv {
-    vars: HashMap<String, EvalValue>,
-    fns: HashMap<String, EvalValue>,
+    env: HashMap<String, EvalValue>,
 }
 
 impl EvalEnv {
@@ -129,23 +130,19 @@ impl EvalEnv {
         } else {
             EvalValue::Nil
         };
-        self.vars.insert(id, init)
+        self.env.insert(id, init)
     }
 
     fn lookup_var(&self, id: &str) -> Option<&EvalValue> {
-        self.vars.get(id)
+        self.env.get(id)
     }
 
     fn lookup_var_mut(&mut self, id: &str) -> Option<&mut EvalValue> {
-        self.vars.get_mut(id)
+        self.env.get_mut(id)
     }
 
     fn add_fn(&mut self, func: LoxFunction) -> Option<EvalValue> {
-        self.fns.insert(func.name.clone(), EvalValue::FunDecl(func))
-    }
-
-    fn lookup_lox_fn(&self, id: String) -> Option<&EvalValue> {
-        self.fns.get(&id)
+        self.env.insert(func.name.clone(), EvalValue::FunDecl(func))
     }
 }
 
@@ -177,16 +174,6 @@ impl EvalState {
             .add_fn(func)
     }
 
-    fn lookup_lox_fn(&self, id: &str) -> Option<&EvalValue> {
-        for env in &self.env {
-            if env.fns.contains_key(id) {
-                return env.lookup_lox_fn(id.to_string());
-            }
-        }
-
-        None
-    }
-
     fn add_var(&mut self, id: String, initializer: Option<EvalValue>) -> Option<EvalValue> {
         self.env
             .front_mut()
@@ -196,7 +183,7 @@ impl EvalState {
 
     fn var_value(&self, id: &str) -> Option<&EvalValue> {
         for env in &self.env {
-            if env.vars.contains_key(id) {
+            if env.env.contains_key(id) {
                 return env.lookup_var(id);
             }
         }
@@ -206,7 +193,7 @@ impl EvalState {
 
     fn var_value_mut(&mut self, id: &str) -> Option<&mut EvalValue> {
         for env in &mut self.env {
-            if env.vars.contains_key(id) {
+            if env.env.contains_key(id) {
                 return env.lookup_var_mut(id);
             }
         }
@@ -216,7 +203,7 @@ impl EvalState {
 
     fn var_exists(&self, id: &str) -> bool {
         for env in &self.env {
-            if env.vars.contains_key(id) {
+            if env.env.contains_key(id) {
                 return true;
             }
         }
@@ -224,12 +211,41 @@ impl EvalState {
         false
     }
 
-    fn push(&mut self) {
+    fn push(&mut self) -> ScopeGuard {
+        trace!("push");
         self.env.push_front(EvalEnv::new());
+        ScopeGuard::new()
     }
 
     fn pop(&mut self) {
+        trace!("pop");
         self.env.pop_front();
+    }
+}
+
+struct ScopeGuard {
+    active: bool,
+}
+
+impl ScopeGuard {
+    fn new() -> Self {
+        ScopeGuard { active: true }
+    }
+
+    fn pop_scope(&mut self, state: &mut EvalState) {
+        if self.active {
+            state.pop();
+            self.active = false;
+        }
+    }
+}
+
+impl Drop for ScopeGuard {
+    fn drop(&mut self) {
+        if self.active {
+            // This should not happen in normal flow - it means we didn't properly clean up
+            eprintln!("Warning: ScopeGuard dropped without proper cleanup");
+        }
     }
 }
 
@@ -265,10 +281,15 @@ impl<'eval> Eval<'_> {
         let mut value = EvalValue::Nil;
         for ast in tree {
             value = self.eval_ast(ast)?;
-            trace!("eval = {value}");
+            trace!("eval: {value:?}");
         }
 
-        Ok(value)
+        if let EvalValue::Return(v) = value {
+            trace!("eval - got return: {}", *v);
+            Ok(*v)
+        } else {
+            Ok(value)
+        }
     }
 
     fn eval_ast(&mut self, ast: &'eval Ast) -> EvalResult<EvalValue> {
@@ -293,7 +314,7 @@ impl<'eval> Eval<'_> {
                 then,
                 or_else,
             } => self.eval_if_stmt(condition, then, or_else),
-            AstStmt::Return(_ast) => todo!("return stmts"),
+            AstStmt::Return(ast) => self.eval_return(ast),
             AstStmt::While(cond, body) => self.eval_while(cond, body),
         }
     }
@@ -368,20 +389,17 @@ impl<'eval> Eval<'_> {
     ) -> EvalResult<EvalValue> {
         trace!("eval_binary");
         let left_expr = self.eval_expr(left)?;
+        trace!("eval_binary: left = {left_expr:?}");
         let right_expr = self.eval_expr(right)?;
+        trace!("eval_binary: right = {right_expr:?}");
         let result = match op.lexeme {
             Lexeme::Plus => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Number(l + r),
                 (EvalValue::String(l), EvalValue::String(r)) => EvalValue::String(l + &r),
-                /* TODO: I think this should be valid but not for CC
-                    (EvalValue::String(l), EvalValue::Number(r)) => {
-                        EvalValue::String(l + &r.to_string())
-                    }
-                    (EvalValue::Number(l), EvalValue::String(r)) => {
-                        EvalValue::String(l.to_string() + &r)
-                    }
-                */
-                _ => return Err(EvalErrors::StringsOrNumbers(op.span.line())),
+                _e => {
+                    trace!("bad + operands: left = {:?}, right = {:?}", _e.0, _e.1);
+                    return Err(EvalErrors::StringsOrNumbers(op.span.line()));
+                }
             },
             Lexeme::Minus => match (left_expr, right_expr) {
                 (EvalValue::Number(l), EvalValue::Number(r)) => EvalValue::Number(l - r),
@@ -453,8 +471,6 @@ impl<'eval> Eval<'_> {
     fn eval_identifier(&self, id: &str) -> Option<&EvalValue> {
         if let Some(val) = self.state.var_value(id) {
             Some(val)
-        } else if let Some(func) = self.state.lookup_lox_fn(id) {
-            Some(func)
         } else {
             None
         }
@@ -510,38 +526,27 @@ impl<'eval> Eval<'_> {
 
     fn eval_block(&mut self, block: &[Ast]) -> EvalResult<EvalValue> {
         trace!("eval_block");
-        self.state.push();
 
-        // Use a closure to ensure pop() is always called
-        let result = (|| {
-            let mut value = EvalValue::Nil;
-            for ast in block {
-                value = self.eval_ast(ast)?;
+        let mut result = EvalValue::Nil;
+
+        let mut guard = self.state.push();
+        for ast in block {
+            result = self.eval_ast(ast)?;
+
+            if let EvalValue::Return(v) = result {
+                guard.pop_scope(&mut self.state);
+                return Ok(EvalValue::Return(v));
             }
-            Ok(value)
-        })();
+        }
 
-        self.state.pop();
-        result
+        guard.pop_scope(&mut self.state);
 
-        // Alternative approach using RAII guard pattern for future reference:
-        //
-        // self.state.push();
-        //
-        // // Create a guard that will pop on drop
-        // struct ScopeGuard<'a>(&'a mut EvalState);
-        // impl Drop for ScopeGuard<'_> {
-        //     fn drop(&mut self) {
-        //         self.0.pop();
-        //     }
-        // }
-        // let _guard = ScopeGuard(&mut self.state);
-        //
-        // let mut result = EvalValue::Nil;
-        // for ast in block {
-        //     result = self.eval_ast(&ast)?;
-        // }
-        // Ok(result)
+        if let EvalValue::Return(v) = result {
+            trace!("eval_block - got return: {}", *v);
+            Ok(*v)
+        } else {
+            Ok(result)
+        }
     }
 
     fn eval_if_stmt(
@@ -557,14 +562,14 @@ impl<'eval> Eval<'_> {
             match then_block {
                 Ast::Block(asts) => self.eval_block(asts),
                 Ast::Statement(ast_stmt) => self.eval_stmt(ast_stmt),
-                _ => todo!("then block not block or statement"),
+                _ => panic!("then block not block or statement"),
             }
         } else if let Some(ast) = else_block {
             trace!("eval_if:else");
             match ast.as_ref() {
                 Ast::Block(block) => self.eval_block(block),
                 Ast::Statement(stmt) => self.eval_stmt(stmt),
-                _ => todo!("then block not block or statement"),
+                _ => panic!("else block not block or statement"),
             }
         } else {
             Ok(EvalValue::Nil)
@@ -575,10 +580,14 @@ impl<'eval> Eval<'_> {
         trace!("eval_while");
         loop {
             if Eval::is_truthy(&self.eval_expr(cond)?) {
-                match body {
+                let result = match body {
                     Ast::Block(asts) => self.eval_block(asts)?,
                     Ast::Statement(ast_stmt) => self.eval_stmt(ast_stmt)?,
-                    _ => todo!("then block not block or statement"),
+                    _ => panic!("then block not block or statement"),
+                };
+
+                if let EvalValue::Return(_) = &result {
+                    return Ok(result);
                 }
             } else {
                 break;
@@ -589,12 +598,12 @@ impl<'eval> Eval<'_> {
     }
 
     fn eval_call(&mut self, func: &str, args: &[AstExpr], site: &Span) -> EvalResult<EvalValue> {
-        let lox_func = match self.state.lookup_lox_fn(func) {
-            Some(value) => match value {
-                EvalValue::FunDecl(lox_function) => lox_function.clone(),
-                _ => todo!(),
-            },
-            None => todo!("no such function at {site}"),
+        trace!("eval_call: {func}({args:?}) @ {site}");
+
+        let lox_func = if let Some(EvalValue::FunDecl(f)) = self.state.var_value(func) {
+            f.clone()
+        } else {
+            panic!("no such function {func} at {site}");
         };
 
         let val = if lox_func.arity() == args.len() {
@@ -607,34 +616,46 @@ impl<'eval> Eval<'_> {
             });
         };
 
-        Ok(val)
+        if let EvalValue::Return(v) = val {
+            trace!("eval_call - got return: {}", *v);
+            // due to recursion, could have nested EvalValue::Return,
+            // so extract the "root" EvalValue
+            let mut ret = v;
+            while let EvalValue::Return(v) = *ret {
+                trace!("eval_call - got return: {v}");
+                ret = v;
+            }
+
+            Ok(*ret)
+        } else {
+            Ok(val)
+        }
     }
 
     fn do_fn_call(&mut self, lox_func: &LoxFunction, args: &[AstExpr]) -> EvalResult<EvalValue> {
+        trace!("do_fn_call({lox_func})");
+
         let mut vals = Vec::with_capacity(args.len());
-        for arg in args {
+        for (i, arg) in args.iter().enumerate() {
+            trace!("do_fn_call: evaluating arg{i}: {arg}");
             let val = self.eval_expr(arg)?;
             vals.push(val.clone());
+            trace!("do_fn_call: arg{i}: {arg} = {val}");
         }
 
         match &lox_func.fn_type {
             LoxFunctionType::System(system) => system(&vals),
             LoxFunctionType::UserDefined(body) => {
-                self.state.push();
+                trace!("calling UDF: {}", lox_func.name);
 
-                lox_func
-                    .params
-                    .iter()
-                    .flatten()
-                    .zip(vals)
-                    .for_each(|(p, i)| {
-                        self.state.add_var(p.to_string(), Some(i));
-                    });
+                let mut guard = self.state.push();
+
+                for (param, value) in lox_func.params.iter().flatten().zip(vals) {
+                    self.state.add_var(param.to_string(), Some(value));
+                }
 
                 let result = self.eval_ast(body);
-
-                self.state.pop();
-
+                guard.pop_scope(&mut self.state);
                 result
             }
         }
@@ -646,12 +667,27 @@ impl<'eval> Eval<'_> {
         params: &[String],
         body: &Ast,
     ) -> EvalResult<EvalValue> {
+        trace!("eval_fun_decl");
+
         self.state.add_lox_fn(LoxFunction {
             name: name.to_string(),
             params: Some(params.to_vec()),
             fn_type: LoxFunctionType::UserDefined((*body).clone()),
         });
         Ok(EvalValue::Nil)
+    }
+
+    fn eval_return(&mut self, ast: &Option<Box<AstExpr>>) -> EvalResult<EvalValue> {
+        trace!("eval_return");
+        let ret_val = if let Some(return_expr) = ast {
+            let val = self.eval_expr(return_expr)?;
+            EvalValue::Return(Box::new(val))
+        } else {
+            EvalValue::Nil
+        };
+
+        trace!("eval_return: returning {ret_val:?}");
+        Ok(EvalValue::Return(Box::new(ret_val)))
     }
 }
 
